@@ -1,13 +1,16 @@
 const versionData = require('../../version.json');
 
 exports.handler = async (event) => {
-  const platform = event.queryStringParameters.platform; // 'android' or 'ios'
-  const currentVersion = event.queryStringParameters.currentVersion; // e.g. '1.0.0'
+  const platform = event.queryStringParameters ? event.queryStringParameters.platform : null; // 'android' or 'ios'
+  const currentVersion = event.queryStringParameters ? event.queryStringParameters.currentVersion : null; // e.g. '1.0.0'
 
   if (!platform || !versionData[platform]) {
     return {
       statusCode: 400,
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*"
+      },
       body: JSON.stringify({ error: "Invalid or missing platform (android | ios required)" }),
     };
   }
