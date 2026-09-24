@@ -1,5 +1,5 @@
 import React from 'react';
-import { Zap, Layers, UploadCloud, History, BookOpen, Server, ShieldCheck } from 'lucide-react';
+import { Layers, UploadCloud, History, BookOpen, Server, ShieldCheck } from 'lucide-react';
 
 interface SidebarProps {
   activeTab: string;
@@ -40,8 +40,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           } transition-all duration-300`}
         >
           <div className="flex items-center space-x-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-cyan-500 via-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/30 shrink-0 transform transition-transform hover:scale-105">
-              <Zap className="h-6 w-6 text-white" />
+            <div className="h-10 w-10 rounded-xl overflow-hidden shadow-lg shadow-cyan-500/30 shrink-0 border border-cyan-500/30 transform transition-transform hover:scale-105 bg-slate-900 flex items-center justify-center">
+              <img src="/logo.png" alt="CodePush Logo" className="h-full w-full object-cover" />
             </div>
             {!isCollapsed && (
               <div className="truncate transition-all duration-300">
