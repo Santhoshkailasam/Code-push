@@ -15,6 +15,7 @@ import {
   Server,
   Smartphone,
   Shield,
+  X,
 } from 'lucide-react';
 import {
   signInWithEmailAndPassword,
@@ -56,7 +57,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
   // Status, Toast & Error handling
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
 
@@ -145,7 +145,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
-    setError(null);
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
@@ -165,7 +164,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     } catch (err: any) {
       console.error('Live Google Sign-In Error:', err);
       const msg = formatAuthError(err);
-      setError(msg);
       showToast(msg, 'error');
     } finally {
       setLoading(false);
@@ -174,11 +172,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
 
     if (!email || !password) {
       const msg = 'Please fill in all required fields.';
-      setError(msg);
       showToast(msg, 'error');
       return;
     }
@@ -186,13 +182,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     if (mode === 'register') {
       if (password !== confirmPassword) {
         const msg = 'Passwords do not match.';
-        setError(msg);
         showToast(msg, 'error');
         return;
       }
       if (password.length < 6) {
         const msg = 'Password must be at least 6 characters.';
-        setError(msg);
         showToast(msg, 'error');
         return;
       }
@@ -206,7 +200,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         const methods = await fetchSignInMethodsForEmail(auth, email);
         if (methods.includes('google.com') && !methods.includes('password')) {
           const googleErrMsg = `The email "${email}" is registered via Google Sign-In. Please sign in using the "Continue with Google" button.`;
-          setError(googleErrMsg);
           showToast(googleErrMsg, 'error');
           setLoading(false);
           return;
@@ -254,7 +247,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     } catch (err: any) {
       console.error('Live Firebase Authentication Error:', err);
       const msg = formatAuthError(err);
-      setError(msg);
       showToast(msg, 'error');
     } finally {
       setLoading(false);
@@ -427,10 +419,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
             >
               <button
                 type="button"
-                onClick={() => {
-                  setMode('login');
-                  setError(null);
-                }}
+                onClick={() => setMode('login')}
                 className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all duration-300 cursor-pointer ${mode === 'login'
                   ? 'bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 text-white shadow-lg shadow-cyan-500/25 scale-[1.02]'
                   : isDark
@@ -442,10 +431,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setMode('register');
-                  setError(null);
-                }}
+                onClick={() => setMode('register')}
                 className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all duration-300 cursor-pointer ${mode === 'register'
                   ? 'bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 text-white shadow-lg shadow-cyan-500/25 scale-[1.02]'
                   : isDark
@@ -456,14 +442,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 Create Account
               </button>
             </div>
-
-            {/* Error Banner Notification */}
-            {error && (
-              <div className="mb-6 p-3.5 rounded-2xl bg-rose-500/15 border border-rose-500/35 text-rose-600 dark:text-rose-300 text-xs flex items-center space-x-2.5 animate-shake shadow-lg shadow-rose-500/10">
-                <AlertCircle className="h-4 w-4 shrink-0 text-rose-500" />
-                <span className="font-bold leading-relaxed">{error}</span>
-              </div>
-            )}
 
             {/* Email & Password Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -698,20 +676,30 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         </div>
       </div>
 
-      {/* Toast Notification Banner */}
+      {/* Top-Right Toast Notification Banner */}
       {toast && (
         <div
-          className={`fixed bottom-6 left-6 z-[70] max-w-md px-4 py-3 rounded-2xl shadow-2xl flex items-center space-x-3 text-xs font-semibold animate-bounce border backdrop-blur-xl ${toast.type === 'success'
-            ? 'bg-emerald-950/90 border-emerald-500/50 text-emerald-300 shadow-emerald-950/50 dark:bg-emerald-950/90 dark:text-emerald-200'
-            : 'bg-rose-950/90 border-rose-500/50 text-rose-300 shadow-rose-950/50 dark:bg-rose-950/90 dark:text-rose-200'
+          className={`fixed top-6 right-6 z-[100] max-w-md w-[calc(100%-3rem)] sm:w-auto px-4 py-3.5 rounded-2xl shadow-2xl flex items-center justify-between space-x-3 text-xs font-semibold animate-toast-slide border backdrop-blur-2xl transition-all duration-300 ${toast.type === 'success'
+            ? 'bg-slate-900/95 border-emerald-500/50 text-emerald-300 shadow-emerald-950/40 dark:bg-slate-950/95 dark:text-emerald-200'
+            : 'bg-slate-900/95 border-rose-500/50 text-rose-300 shadow-rose-950/40 dark:bg-slate-950/95 dark:text-rose-200'
             }`}
         >
-          {toast.type === 'success' ? (
-            <ShieldCheck className="h-5 w-5 text-emerald-400 shrink-0" />
-          ) : (
-            <AlertCircle className="h-5 w-5 text-rose-400 shrink-0" />
-          )}
-          <span className="leading-snug">{toast.message}</span>
+          <div className="flex items-center space-x-3 min-w-0">
+            {toast.type === 'success' ? (
+              <ShieldCheck className="h-5 w-5 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertCircle className="h-5 w-5 text-rose-400 shrink-0" />
+            )}
+            <span className="leading-snug font-bold truncate">{toast.message}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setToast(null)}
+            className="ml-2 text-slate-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer shrink-0"
+            title="Dismiss Toast"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
 

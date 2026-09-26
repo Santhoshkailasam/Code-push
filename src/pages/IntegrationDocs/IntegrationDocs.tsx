@@ -11,6 +11,8 @@ import {
   Smartphone,
   Apple,
   Zap,
+  GitBranch,
+  Key,
 } from 'lucide-react';
 
 interface IntegrationDocsProps {
@@ -19,6 +21,7 @@ interface IntegrationDocsProps {
 
 export const IntegrationDocs: React.FC<IntegrationDocsProps> = ({ theme = 'dark' }) => {
   const isDark = theme === 'dark';
+  const [docTab, setDocTab] = useState<'sdk' | 'github' | 'tester'>('sdk');
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [pkgManager, setPkgManager] = useState<'npm' | 'yarn' | 'pnpm' | 'bun'>('npm');
   const [selectedPlatform, setSelectedPlatform] = useState<'android' | 'ios'>('android');
@@ -143,6 +146,50 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 14, color: '#64748b', marginTop: 8 },
 });`;
 
+  const gitHubWorkflowCode = `name: CodePush Auto-Release & Live Sync
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 📦 Install Dependencies
+        run: npm ci
+
+      - name: ⚙️ Generate Version & Metadata
+        id: vars
+        run: |
+          VERSION="1.1.$(date +'%Y%m%d%H%M')"
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "commit_msg=$COMMIT_MSG" >> $GITHUB_OUTPUT
+
+      - name: 🚀 Publish Release to CodePush & Target Phones
+        run: |
+          curl -X POST "https://your-site.netlify.app/.netlify/functions/publish-release" \\
+            -H "Content-Type: application/json" \\
+            -H "x-codepush-api-key: \${{ secrets.CODEPUSH_API_KEY }}" \\
+            -d '{
+              "platform": "android",
+              "version": "'"\${{ steps.vars.outputs.version }}"'",
+              "downloadUrl": "https://your-site.netlify.app/bundles/latest.zip",
+              "mandatory": true,
+              "releaseNotes": "Git Push Commit: '"\${{ steps.vars.outputs.commit_msg }}"'"
+            }'`;
+
   const handleTestEndpoint = async () => {
     setIsTestingApi(true);
     setApiResponse(null);
@@ -181,7 +228,7 @@ const styles = StyleSheet.create({
 
   return (
     <div className="space-y-8 max-w-7xl">
-      {/* Header Banner */}
+      {/* Header Banner & Tab Navigation */}
       <div
         className={`rounded-3xl border p-6 sm:p-8 backdrop-blur-xl relative overflow-hidden transition-all duration-300 ${cardBgClass}`}
       >
@@ -195,10 +242,10 @@ const styles = StyleSheet.create({
               </div>
               <div>
                 <h1 className={`text-xl sm:text-2xl font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  React Native Client SDK Integration
+                  CodePush Integration Center
                 </h1>
                 <p className={`text-xs font-semibold ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                  Complete single-page guide for integrating instant OTA hotfix deployments into React Native Android & iOS apps.
+                  Select a section below to configure your mobile app SDK, GitHub CI/CD automation, or test live endpoints.
                 </p>
               </div>
             </div>
@@ -217,7 +264,7 @@ const styles = StyleSheet.create({
               }`}
             >
               <Smartphone className="h-4 w-4" />
-              <span>Android Integration</span>
+              <span>Android</span>
             </button>
 
             <button
@@ -231,241 +278,354 @@ const styles = StyleSheet.create({
               }`}
             >
               <Apple className="h-4 w-4" />
-              <span>iOS Integration</span>
+              <span>iOS</span>
             </button>
           </div>
         </div>
-      </div>
 
-      {/* STEP 1: INSTALL DEPENDENCIES */}
-      <div className={`rounded-3xl border p-6 sm:p-8 backdrop-blur-xl space-y-6 ${cardBgClass}`}>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center space-x-3">
-            <div className="h-8 w-8 rounded-xl bg-cyan-500/15 text-cyan-600 font-mono text-xs font-black flex items-center justify-center">
-              01
-            </div>
-            <div className="flex items-center space-x-2">
-              <Terminal className="h-5 w-5 text-cyan-500" />
-              <h2 className={`text-base font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                Install Required React Native Packages
-              </h2>
-            </div>
-          </div>
-
-          {/* Package Manager Picker */}
-          <div className={`flex p-1 rounded-xl border text-xs font-semibold ${isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-300'}`}>
-            {(['npm', 'yarn', 'pnpm', 'bun'] as const).map((mgr) => (
-              <button
-                key={mgr}
-                onClick={() => setPkgManager(mgr)}
-                className={`px-3 py-1 rounded-lg uppercase transition-all cursor-pointer ${
-                  pkgManager === mgr
-                    ? 'bg-cyan-500 text-white shadow-xs font-black'
-                    : isDark
-                    ? 'text-slate-400 hover:text-white'
-                    : 'text-slate-600 hover:text-slate-950 font-bold'
-                }`}
-              >
-                {mgr}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Terminal Code Window */}
-        <div className="rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 shadow-2xl">
-          <div className="bg-slate-900 px-4 py-2.5 flex items-center justify-between border-b border-slate-800">
-            <div className="flex items-center space-x-2">
-              <span className="h-3 w-3 rounded-full bg-rose-500/80 inline-block" />
-              <span className="h-3 w-3 rounded-full bg-amber-500/80 inline-block" />
-              <span className="h-3 w-3 rounded-full bg-emerald-500/80 inline-block" />
-              <span className="text-xs font-mono text-slate-400 pl-2">bash terminal</span>
-            </div>
-            <button
-              onClick={() => copyToClipboard(installCmds[pkgManager], 1)}
-              className="flex items-center space-x-1.5 px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-400 text-xs font-mono transition-all cursor-pointer"
-            >
-              {copiedIndex === 1 ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-              <span>{copiedIndex === 1 ? 'Copied!' : 'Copy'}</span>
-            </button>
-          </div>
-          <pre className="p-5 font-mono text-xs text-cyan-300 overflow-x-auto whitespace-pre-wrap leading-relaxed">
-            {installCmds[pkgManager]}
-          </pre>
-        </div>
-
-        {/* iOS Pods Note */}
-        <div className={`p-4 rounded-2xl border space-y-2 ${innerBoxClass}`}>
-          <span className="font-bold text-xs flex items-center space-x-2 text-cyan-600">
-            <Apple className="h-4 w-4" />
-            <span>For iOS projects (CocoaPods installation):</span>
-          </span>
-          <pre className="font-mono text-xs p-3 rounded-xl bg-slate-950 text-slate-200 border border-slate-800 overflow-x-auto">
-            cd ios && pod install
-          </pre>
-        </div>
-      </div>
-
-      {/* STEP 2: CODEPUSH SERVICE SCRIPT */}
-      <div className={`rounded-3xl border p-6 sm:p-8 backdrop-blur-xl space-y-6 ${cardBgClass}`}>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center space-x-3">
-            <div className="h-8 w-8 rounded-xl bg-cyan-500/15 text-cyan-600 font-mono text-xs font-black flex items-center justify-center">
-              02
-            </div>
-            <div className="flex items-center space-x-2">
-              <FileCode className="h-5 w-5 text-cyan-500" />
-              <div>
-                <h2 className={`text-base font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  Add CodePush Service (`src/services/CodePushService.ts`)
-                </h2>
-                <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                  Handles checking Netlify edge function, downloading zip bundle, unzipping & instant JS engine restart.
-                </p>
-              </div>
-            </div>
-          </div>
+        {/* Tab Switcher Buttons */}
+        <div className="flex flex-wrap items-center gap-3 pt-6 mt-6 border-t border-slate-800/60 relative z-10">
+          <button
+            onClick={() => setDocTab('sdk')}
+            className={`flex items-center space-x-2 px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-xs font-extrabold transition-all cursor-pointer ${
+              docTab === 'sdk'
+                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/30 scale-[1.02]'
+                : isDark
+                ? 'bg-slate-950/80 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                : 'bg-slate-100 border border-slate-300 text-slate-700 hover:text-slate-950'
+            }`}
+          >
+            <Smartphone className="h-4 w-4" />
+            <span>1. Mobile Client SDK</span>
+          </button>
 
           <button
-            onClick={() => copyToClipboard(codePushServiceCode, 2)}
-            className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-xs font-bold shadow-md shadow-cyan-500/20 hover:scale-105 active:scale-95 transition-all cursor-pointer self-start sm:self-auto"
+            onClick={() => setDocTab('github')}
+            className={`flex items-center space-x-2 px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-xs font-extrabold transition-all cursor-pointer ${
+              docTab === 'github'
+                ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-500/30 scale-[1.02]'
+                : isDark
+                ? 'bg-slate-950/80 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                : 'bg-slate-100 border border-slate-300 text-slate-700 hover:text-slate-950'
+            }`}
           >
-            {copiedIndex === 2 ? <Check className="h-4 w-4 text-emerald-300" /> : <Copy className="h-4 w-4" />}
-            <span>{copiedIndex === 2 ? 'Copied to Clipboard!' : 'Copy Code'}</span>
+            <GitBranch className="h-4 w-4 text-purple-300" />
+            <span>2. GitHub Actions CI/CD (Auto-Push)</span>
           </button>
-        </div>
-
-        {/* Code Viewer */}
-        <div className="rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 shadow-2xl">
-          <div className="bg-slate-900 px-4 py-2.5 flex items-center justify-between border-b border-slate-800">
-            <span className="text-xs font-mono text-cyan-400">src/services/CodePushService.ts</span>
-            <span className="text-[10px] font-mono text-slate-500">TypeScript / React Native</span>
-          </div>
-          <pre className="p-5 font-mono text-xs text-slate-200 overflow-x-auto leading-relaxed max-h-[32rem]">
-            {codePushServiceCode}
-          </pre>
-        </div>
-      </div>
-
-      {/* STEP 3: APP ENTRY INITIALIZATION */}
-      <div className={`rounded-3xl border p-6 sm:p-8 backdrop-blur-xl space-y-6 ${cardBgClass}`}>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center space-x-3">
-            <div className="h-8 w-8 rounded-xl bg-cyan-500/15 text-cyan-600 font-mono text-xs font-black flex items-center justify-center">
-              03
-            </div>
-            <div className="flex items-center space-x-2">
-              <Code2 className="h-5 w-5 text-cyan-500" />
-              <div>
-                <h2 className={`text-base font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  Trigger Update Check on App Startup (`App.tsx`)
-                </h2>
-                <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                  Invoke `CodePushService.checkForUpdates()` inside React `useEffect` when your application mounts.
-                </p>
-              </div>
-            </div>
-          </div>
 
           <button
-            onClick={() => copyToClipboard(appTsxCode, 3)}
-            className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-xs font-bold shadow-md shadow-cyan-500/20 hover:scale-105 active:scale-95 transition-all cursor-pointer self-start sm:self-auto"
+            onClick={() => setDocTab('tester')}
+            className={`flex items-center space-x-2 px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-xs font-extrabold transition-all cursor-pointer ${
+              docTab === 'tester'
+                ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/30 scale-[1.02]'
+                : isDark
+                ? 'bg-slate-950/80 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                : 'bg-slate-100 border border-slate-300 text-slate-700 hover:text-slate-950'
+            }`}
           >
-            {copiedIndex === 3 ? <Check className="h-4 w-4 text-emerald-300" /> : <Copy className="h-4 w-4" />}
-            <span>{copiedIndex === 3 ? 'Copied to Clipboard!' : 'Copy Snippet'}</span>
+            <Play className="h-4 w-4 text-emerald-300" />
+            <span>3. Interactive API Tester</span>
           </button>
-        </div>
-
-        <div className="rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 shadow-2xl">
-          <div className="bg-slate-900 px-4 py-2.5 flex items-center justify-between border-b border-slate-800">
-            <span className="text-xs font-mono text-cyan-400">App.tsx</span>
-            <span className="text-[10px] font-mono text-slate-500">React Native Entrypoint</span>
-          </div>
-          <pre className="p-5 font-mono text-xs text-slate-200 overflow-x-auto leading-relaxed">
-            {appTsxCode}
-          </pre>
         </div>
       </div>
 
-      {/* STEP 4: LIVE ENDPOINT TESTER */}
-      <div className={`rounded-3xl border p-6 sm:p-8 backdrop-blur-xl space-y-6 ${cardBgClass}`}>
-        <div className="flex items-center space-x-3">
-          <div className="h-8 w-8 rounded-xl bg-cyan-500/15 text-cyan-600 font-mono text-xs font-black flex items-center justify-center">
-            04
-          </div>
-          <div className="flex items-center space-x-2">
-            <Play className="h-5 w-5 text-cyan-500" />
-            <div>
-              <h2 className={`text-base font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                Interactive Endpoint Tester (`/.netlify/functions/check-update`)
-              </h2>
-              <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                Test serverless update queries live against Netlify function endpoints directly from this dashboard.
-              </p>
+      {/* TAB 1: MOBILE CLIENT SDK SETUP */}
+      {docTab === 'sdk' && (
+        <div className="space-y-8">
+          {/* STEP 1: INSTALL DEPENDENCIES */}
+          <div className={`rounded-3xl border p-6 sm:p-8 backdrop-blur-xl space-y-6 ${cardBgClass}`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center space-x-3">
+                <div className="h-8 w-8 rounded-xl bg-cyan-500/15 text-cyan-600 font-mono text-xs font-black flex items-center justify-center">
+                  01
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Terminal className="h-5 w-5 text-cyan-500" />
+                  <h2 className={`text-base font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                    Install Required React Native Packages
+                  </h2>
+                </div>
+              </div>
+
+              {/* Package Manager Picker */}
+              <div className={`flex p-1 rounded-xl border text-xs font-semibold ${isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-300'}`}>
+                {(['npm', 'yarn', 'pnpm', 'bun'] as const).map((mgr) => (
+                  <button
+                    key={mgr}
+                    onClick={() => setPkgManager(mgr)}
+                    className={`px-3 py-1 rounded-lg uppercase transition-all cursor-pointer ${
+                      pkgManager === mgr
+                        ? 'bg-cyan-500 text-white shadow-xs font-black'
+                        : isDark
+                        ? 'text-slate-400 hover:text-white'
+                        : 'text-slate-600 hover:text-slate-950 font-bold'
+                    }`}
+                  >
+                    {mgr}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Request Controls */}
-          <div className={`lg:col-span-6 p-5 rounded-2xl border space-y-4 ${innerBoxClass}`}>
-            <h3 className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-700'}`}>
-              Query Parameters
-            </h3>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="block text-[11px] font-semibold mb-1">Target Platform:</label>
-                <select
-                  value={selectedPlatform}
-                  onChange={(e) => setSelectedPlatform(e.target.value as 'android' | 'ios')}
-                  className={`w-full p-2.5 rounded-xl border text-xs font-semibold ${
-                    isDark ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-300 text-slate-900'
-                  }`}
+            {/* Terminal Code Window */}
+            <div className="rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 shadow-2xl">
+              <div className="bg-slate-900 px-4 py-2.5 flex items-center justify-between border-b border-slate-800">
+                <div className="flex items-center space-x-2">
+                  <span className="h-3 w-3 rounded-full bg-rose-500/80 inline-block" />
+                  <span className="h-3 w-3 rounded-full bg-amber-500/80 inline-block" />
+                  <span className="h-3 w-3 rounded-full bg-emerald-500/80 inline-block" />
+                  <span className="text-xs font-mono text-slate-400 pl-2">bash terminal</span>
+                </div>
+                <button
+                  onClick={() => copyToClipboard(installCmds[pkgManager], 1)}
+                  className="flex items-center space-x-1.5 px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-400 text-xs font-mono transition-all cursor-pointer"
                 >
-                  <option value="android">Android</option>
-                  <option value="ios">iOS</option>
-                </select>
+                  {copiedIndex === 1 ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                  <span>{copiedIndex === 1 ? 'Copied!' : 'Copy'}</span>
+                </button>
+              </div>
+              <pre className="p-5 font-mono text-xs text-cyan-300 overflow-x-auto whitespace-pre-wrap leading-relaxed">
+                {installCmds[pkgManager]}
+              </pre>
+            </div>
+
+            {/* iOS Pods Note */}
+            <div className={`p-4 rounded-2xl border space-y-2 ${innerBoxClass}`}>
+              <span className="font-bold text-xs flex items-center space-x-2 text-cyan-600">
+                <Apple className="h-4 w-4" />
+                <span>For iOS projects (CocoaPods installation):</span>
+              </span>
+              <pre className="font-mono text-xs p-3 rounded-xl bg-slate-950 text-slate-200 border border-slate-800 overflow-x-auto">
+                cd ios && pod install
+              </pre>
+            </div>
+          </div>
+
+          {/* STEP 2: CODEPUSH SERVICE SCRIPT */}
+          <div className={`rounded-3xl border p-6 sm:p-8 backdrop-blur-xl space-y-6 ${cardBgClass}`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center space-x-3">
+                <div className="h-8 w-8 rounded-xl bg-cyan-500/15 text-cyan-600 font-mono text-xs font-black flex items-center justify-center">
+                  02
+                </div>
+                <div className="flex items-center space-x-2">
+                  <FileCode className="h-5 w-5 text-cyan-500" />
+                  <div>
+                    <h2 className={`text-base font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                      Add CodePush Service (`src/services/CodePushService.ts`)
+                    </h2>
+                    <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                      Handles checking Netlify edge function, downloading zip bundle, unzipping & instant JS engine restart.
+                    </p>
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-semibold mb-1">Current App Version:</label>
-                <input
-                  type="text"
-                  value={testVersion}
-                  onChange={(e) => setTestVersion(e.target.value)}
-                  className={`w-full p-2.5 rounded-xl border font-mono text-xs ${
-                    isDark ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-300 text-slate-900'
-                  }`}
-                />
+              <button
+                onClick={() => copyToClipboard(codePushServiceCode, 2)}
+                className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-xs font-bold shadow-md shadow-cyan-500/20 hover:scale-105 active:scale-95 transition-all cursor-pointer self-start sm:self-auto"
+              >
+                {copiedIndex === 2 ? <Check className="h-4 w-4 text-emerald-300" /> : <Copy className="h-4 w-4" />}
+                <span>{copiedIndex === 2 ? 'Copied to Clipboard!' : 'Copy Code'}</span>
+              </button>
+            </div>
+
+            {/* Code Viewer */}
+            <div className="rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 shadow-2xl">
+              <div className="bg-slate-900 px-4 py-2.5 flex items-center justify-between border-b border-slate-800">
+                <span className="text-xs font-mono text-cyan-400">src/services/CodePushService.ts</span>
+                <span className="text-[10px] font-mono text-slate-500">TypeScript / React Native</span>
+              </div>
+              <pre className="p-5 font-mono text-xs text-slate-200 overflow-x-auto leading-relaxed max-h-[32rem]">
+                {codePushServiceCode}
+              </pre>
+            </div>
+          </div>
+
+          {/* STEP 3: APP ENTRY INITIALIZATION */}
+          <div className={`rounded-3xl border p-6 sm:p-8 backdrop-blur-xl space-y-6 ${cardBgClass}`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center space-x-3">
+                <div className="h-8 w-8 rounded-xl bg-cyan-500/15 text-cyan-600 font-mono text-xs font-black flex items-center justify-center">
+                  03
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Code2 className="h-5 w-5 text-cyan-500" />
+                  <div>
+                    <h2 className={`text-base font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                      Trigger Update Check on App Startup (`App.tsx`)
+                    </h2>
+                    <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                      Invoke `CodePushService.checkForUpdates()` inside React `useEffect` when your application mounts.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => copyToClipboard(appTsxCode, 3)}
+                className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-xs font-bold shadow-md shadow-cyan-500/20 hover:scale-105 active:scale-95 transition-all cursor-pointer self-start sm:self-auto"
+              >
+                {copiedIndex === 3 ? <Check className="h-4 w-4 text-emerald-300" /> : <Copy className="h-4 w-4" />}
+                <span>{copiedIndex === 3 ? 'Copied to Clipboard!' : 'Copy Snippet'}</span>
+              </button>
+            </div>
+
+            <div className="rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 shadow-2xl">
+              <div className="bg-slate-900 px-4 py-2.5 flex items-center justify-between border-b border-slate-800">
+                <span className="text-xs font-mono text-cyan-400">App.tsx</span>
+                <span className="text-[10px] font-mono text-slate-500">React Native Entrypoint</span>
+              </div>
+              <pre className="p-5 font-mono text-xs text-slate-200 overflow-x-auto leading-relaxed">
+                {appTsxCode}
+              </pre>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 2: GITHUB ACTIONS CI/CD AUTO-PUSH INTEGRATION */}
+      {docTab === 'github' && (
+        <div className={`rounded-3xl border p-6 sm:p-8 backdrop-blur-xl space-y-6 ${cardBgClass}`}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center space-x-3">
+              <div className="h-8 w-8 rounded-xl bg-purple-500/15 text-purple-500 font-mono text-xs font-black flex items-center justify-center">
+                02
+              </div>
+              <div className="flex items-center space-x-2">
+                <GitBranch className="h-5 w-5 text-purple-400" />
+                <div>
+                  <h2 className={`text-base font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                    GitHub Auto-Release CI/CD Workflow (`git push` &rarr; Live Phone Update)
+                  </h2>
+                  <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                    Add this workflow file to your <strong>Mobile App GitHub Repository</strong> so pushing code automatically compiles a release and pushes updates to target phones OTA.
+                  </p>
+                </div>
               </div>
             </div>
 
             <button
-              onClick={handleTestEndpoint}
-              disabled={isTestingApi}
-              className="w-full py-3 px-4 rounded-xl text-xs font-bold bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-lg shadow-cyan-500/20 flex items-center justify-center space-x-2 transition-all cursor-pointer"
+              onClick={() => copyToClipboard(gitHubWorkflowCode, 5)}
+              className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-xs font-bold shadow-md shadow-purple-500/20 hover:scale-105 active:scale-95 transition-all cursor-pointer self-start sm:self-auto"
             >
-              <Play className="h-4 w-4" />
-              <span>{isTestingApi ? 'Testing Endpoint...' : 'Send Live HTTP Request'}</span>
+              {copiedIndex === 5 ? <Check className="h-4 w-4 text-emerald-300" /> : <Copy className="h-4 w-4" />}
+              <span>{copiedIndex === 5 ? 'Copied Workflow!' : 'Copy .github/workflows/codepush.yml'}</span>
             </button>
           </div>
 
-          {/* Response Window */}
-          <div className="lg:col-span-6 rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 flex flex-col">
-            <div className="bg-slate-900 px-4 py-2.5 flex items-center justify-between border-b border-slate-800">
-              <span className="text-xs font-mono text-emerald-400 flex items-center">
-                <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> HTTP 200 OK Response
-              </span>
-              <span className="text-[10px] font-mono text-slate-500">application/json</span>
+          {/* GitHub API Key Secret Info Box */}
+          <div className={`p-4 rounded-2xl border space-y-3 ${innerBoxClass}`}>
+            <div className="flex items-center space-x-2 text-xs font-bold text-purple-400">
+              <Key className="h-4 w-4" />
+              <span>GitHub Repository Secret Setup (In your Mobile App Repo):</span>
             </div>
-            <pre className="p-4 font-mono text-xs text-cyan-300 overflow-x-auto flex-1 leading-relaxed">
-              {apiResponse ||
-                `{\n  "status": "Click 'Send Live HTTP Request' to test update response payload"\n}`}
+            <p className="text-xs opacity-90 leading-relaxed">
+              In your <strong>Mobile App GitHub repository</strong>, go to <strong>Settings &rarr; Secrets and variables &rarr; Actions</strong> and add the secret:
+            </p>
+            <div className="flex items-center space-x-2 font-mono text-xs bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-cyan-300">
+              <span className="text-purple-400 font-bold">CODEPUSH_API_KEY:</span>
+              <span>cp_live_sec_key_demo_2026</span>
+            </div>
+          </div>
+
+          {/* GitHub Workflow Code Box */}
+          <div className="rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 shadow-2xl">
+            <div className="bg-slate-900 px-4 py-2.5 flex items-center justify-between border-b border-slate-800">
+              <span className="text-xs font-mono text-purple-400 flex items-center space-x-1.5">
+                <GitBranch className="h-3.5 w-3.5 mr-1 text-purple-400" />
+                .github/workflows/codepush-release.yml (Place in your App Repo)
+              </span>
+              <span className="text-[10px] font-mono text-slate-500">GitHub Actions CI/CD</span>
+            </div>
+            <pre className="p-5 font-mono text-xs text-slate-200 overflow-x-auto leading-relaxed max-h-[30rem]">
+              {gitHubWorkflowCode}
             </pre>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* TAB 3: INTERACTIVE ENDPOINT TESTER */}
+      {docTab === 'tester' && (
+        <div className={`rounded-3xl border p-6 sm:p-8 backdrop-blur-xl space-y-6 ${cardBgClass}`}>
+          <div className="flex items-center space-x-3">
+            <div className="h-8 w-8 rounded-xl bg-emerald-500/15 text-emerald-500 font-mono text-xs font-black flex items-center justify-center">
+              03
+            </div>
+            <div className="flex items-center space-x-2">
+              <Play className="h-5 w-5 text-emerald-500" />
+              <div>
+                <h2 className={`text-base font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                  Interactive Endpoint Tester (`/.netlify/functions/check-update`)
+                </h2>
+                <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                  Test serverless update queries live against Netlify function endpoints directly from this dashboard.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Request Controls */}
+            <div className={`lg:col-span-6 p-5 rounded-2xl border space-y-4 ${innerBoxClass}`}>
+              <h3 className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-700'}`}>
+                Query Parameters
+              </h3>
+
+              <div className="space-y-3 text-xs">
+                <div>
+                  <label className="block text-[11px] font-semibold mb-1">Target Platform:</label>
+                  <select
+                    value={selectedPlatform}
+                    onChange={(e) => setSelectedPlatform(e.target.value as 'android' | 'ios')}
+                    className={`w-full p-2.5 rounded-xl border text-xs font-semibold ${
+                      isDark ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-300 text-slate-900'
+                    }`}
+                  >
+                    <option value="android">Android</option>
+                    <option value="ios">iOS</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold mb-1">Current App Version:</label>
+                  <input
+                    type="text"
+                    value={testVersion}
+                    onChange={(e) => setTestVersion(e.target.value)}
+                    className={`w-full p-2.5 rounded-xl border font-mono text-xs ${
+                      isDark ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-300 text-slate-900'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              <button
+                onClick={handleTestEndpoint}
+                disabled={isTestingApi}
+                className="w-full py-3 px-4 rounded-xl text-xs font-bold bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white shadow-lg shadow-emerald-500/20 flex items-center justify-center space-x-2 transition-all cursor-pointer"
+              >
+                <Play className="h-4 w-4" />
+                <span>{isTestingApi ? 'Testing Endpoint...' : 'Send Live HTTP Request'}</span>
+              </button>
+            </div>
+
+            {/* Response Window */}
+            <div className="lg:col-span-6 rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 flex flex-col">
+              <div className="bg-slate-900 px-4 py-2.5 flex items-center justify-between border-b border-slate-800">
+                <span className="text-xs font-mono text-emerald-400 flex items-center">
+                  <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> HTTP 200 OK Response
+                </span>
+                <span className="text-[10px] font-mono text-slate-500">application/json</span>
+              </div>
+              <pre className="p-4 font-mono text-xs text-cyan-300 overflow-x-auto flex-1 leading-relaxed">
+                {apiResponse ||
+                  `{\n  "status": "Click 'Send Live HTTP Request' to test update response payload"\n}`}
+              </pre>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Netlify Edge & CORS Info */}
       <div
