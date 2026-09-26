@@ -1,63 +1,49 @@
 import type { VersionData } from '../types';
 import initialVersionData from '../../version.json';
 import {
-  initSqliteDb,
-  saveSqliteVersionData,
-  deleteSqliteReleaseRecord,
-  clearSqliteDb,
-} from '../db/sqliteStorage';
-
-const STORAGE_KEY = 'codepush_version_data_v1';
+  initFirebaseDb,
+  subscribeToFirebaseVersionData,
+  saveFirebaseVersionData,
+  deleteFirebaseReleaseRecord,
+  clearFirebaseDb,
+} from '../../db/firebaseStorage';
 
 export async function loadVersionDataAsync(): Promise<VersionData> {
   try {
-    const sqliteData = await initSqliteDb();
-    if (sqliteData) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(sqliteData));
-      return sqliteData;
+    const firebaseData = await initFirebaseDb();
+    if (firebaseData) {
+      return firebaseData;
     }
   } catch (e) {
-    console.warn('SQLite DB load error, using localStorage fallback:', e);
+    console.warn('Firebase Firestore load error:', e);
   }
   return loadVersionDataSync();
 }
 
+export function subscribeToVersionData(onData: (data: VersionData) => void): () => void {
+  return subscribeToFirebaseVersionData(onData);
+}
+
 export function loadVersionDataSync(): VersionData {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (parsed && parsed.android && parsed.ios && Array.isArray(parsed.history)) {
-        return parsed as VersionData;
-      }
-    }
-  } catch (e) {
-    console.warn('Failed to load version data from localStorage:', e);
-  }
   return initialVersionData as VersionData;
 }
 
 export function saveVersionData(data: VersionData): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    saveSqliteVersionData(data).catch((err) =>
-      console.error('Failed to execute SQLite SQL write:', err)
-    );
-  } catch (e) {
-    console.error('Failed to save version data:', e);
-  }
+  saveFirebaseVersionData(data).catch((err) =>
+    console.error('Failed to execute Firebase Firestore write:', err)
+  );
 }
 
 export async function deleteReleaseRecord(id: string): Promise<void> {
-  await deleteSqliteReleaseRecord(id);
+  await deleteFirebaseReleaseRecord(id);
 }
 
 export async function resetVersionDataAsync(): Promise<VersionData> {
   try {
-    localStorage.removeItem(STORAGE_KEY);
-    return await clearSqliteDb();
+    return await clearFirebaseDb();
   } catch (e) {
-    console.error('Failed to reset SQLite version data:', e);
+    console.error('Failed to reset Firebase version data:', e);
   }
   return initialVersionData as VersionData;
 }
+

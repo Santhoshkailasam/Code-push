@@ -1,23 +1,47 @@
 import React, { useState, useEffect } from 'react';
 import { TopHeader } from './components/TopHeader';
 import { Sidebar } from './components/Sidebar';
-import { ActiveReleaseCard } from './components/ActiveReleaseCard';
-import { BundleUploader } from './components/BundleUploader';
-import { ReleaseHistory } from './components/ReleaseHistory';
-import { DashboardAnalytics } from './components/DashboardAnalytics';
 import { NotificationDrawer } from './components/NotificationDrawer';
-import { IntegrationDocs } from './components/IntegrationDocs';
-import { ReleaseDetailScreen } from './components/ReleaseDetailScreen';
+import { FullPageSkeleton } from './components/SkeletonLoader';
+import { ActiveReleaseCard } from './pages/Dashboard/ActiveReleaseCard';
+import { DashboardAnalytics } from './pages/Dashboard/DashboardAnalytics';
+import { BundleUploader } from './pages/PublishUpdates/BundleUploader';
+import { ReleaseHistory } from './pages/ReleaseHistory/ReleaseHistory';
+import { ReleaseDetailScreen } from './pages/ReleaseHistory/ReleaseDetailScreen';
+import { IntegrationDocs } from './pages/IntegrationDocs/IntegrationDocs';
+import { AuthScreen } from './pages/Auth/AuthScreen';
 import type { VersionData, Platform, ReleaseHistoryItem } from './types';
 import {
   loadVersionDataAsync,
   loadVersionDataSync,
   saveVersionData,
   deleteReleaseRecord,
+  subscribeToVersionData,
 } from './utils/storage';
+import { auth } from '../db/firebaseConfig';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { Sparkles } from 'lucide-react';
 
+export interface UserSession {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL?: string | null;
+  accessToken?: string;
+  refreshToken?: string;
+}
+
 export const App: React.FC = () => {
+  const [user, setUser] = useState<UserSession | null>(() => {
+    try {
+      const cached = localStorage.getItem('codepush_cached_user');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [authLoading, setAuthLoading] = useState(true);
+
   const [data, setData] = useState<VersionData>(() => loadVersionDataSync());
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedReleaseForDetail, setSelectedReleaseForDetail] = useState<ReleaseHistoryItem | null>(null);
@@ -26,17 +50,73 @@ export const App: React.FC = () => {
   const [isThemeTransitioning, setIsThemeTransitioning] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
 
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    return (localStorage.getItem('codepush_theme') as 'dark' | 'light') || 'dark';
-  });
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
-  // Load SQLite DB data on mount
+  // Firebase Auth state listener
   useEffect(() => {
-    loadVersionDataAsync().then((sqliteData) => {
-      if (sqliteData) {
-        setData(sqliteData);
+    const unsubscribeAuth = onAuthStateChanged(auth, async (fbUser) => {
+      if (fbUser) {
+        const token = await fbUser.getIdToken();
+        const userObj: UserSession = {
+          uid: fbUser.uid,
+          email: fbUser.email,
+          displayName: fbUser.displayName || fbUser.email?.split('@')[0] || 'Developer',
+          photoURL: fbUser.photoURL,
+          accessToken: token,
+          refreshToken: fbUser.refreshToken,
+        };
+        setUser(userObj);
+        try {
+          localStorage.setItem('codepush_cached_user', JSON.stringify(userObj));
+        } catch (e) {
+          console.warn('Cache write failed:', e);
+        }
+      } else {
+        setUser(null);
+        localStorage.removeItem('codepush_cached_user');
+      }
+      setAuthLoading(false);
+    });
+
+    return () => unsubscribeAuth();
+  }, []);
+
+  const handleLoginSuccess = (userData: UserSession) => {
+    setUser(userData);
+    try {
+      localStorage.setItem('codepush_cached_user', JSON.stringify(userData));
+    } catch (e) {
+      console.warn('Cache write failed:', e);
+    }
+    showToast(`Welcome back, ${userData.displayName || 'Developer'}! Security tokens verified.`);
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+    } catch (e) {
+      console.warn('Sign out warning:', e);
+    }
+    setUser(null);
+    localStorage.removeItem('codepush_cached_user');
+    showToast('Signed out safely. Active session tokens revoked.');
+  };
+
+  // Load Firebase DB data on mount & subscribe to real-time changes
+  useEffect(() => {
+    loadVersionDataAsync().then((firebaseData) => {
+      if (firebaseData) {
+        setData(firebaseData);
       }
     });
+
+    const unsubscribe = subscribeToVersionData((realtimeData) => {
+      if (realtimeData) {
+        setData(realtimeData);
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -44,7 +124,6 @@ export const App: React.FC = () => {
   }, [data]);
 
   useEffect(() => {
-    localStorage.setItem('codepush_theme', theme);
     if (theme === 'light') {
       document.documentElement.classList.add('light');
       document.documentElement.classList.remove('dark');
@@ -162,7 +241,7 @@ export const App: React.FC = () => {
     setData(nextData);
     saveVersionData(nextData);
     deleteReleaseRecord(id);
-    showToast(`Deleted ${deletedItem ? `${deletedItem.platform.toUpperCase()} v${deletedItem.version}` : 'release'} entry from SQLite database!`);
+    showToast(`Deleted ${deletedItem ? `${deletedItem.platform.toUpperCase()} v${deletedItem.version}` : 'release'} entry from Firebase Firestore!`);
   };
 
   const isDark = theme === 'dark';
@@ -177,23 +256,45 @@ export const App: React.FC = () => {
     });
   };
 
+  if (authLoading && !user) {
+    return (
+      <div className="relative h-screen w-screen overflow-hidden">
+        <FullPageSkeleton theme={theme} />
+        <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-xs flex flex-col items-center justify-center space-y-4">
+          <div className="relative flex items-center justify-center">
+            <div className="h-16 w-16 rounded-2xl bg-slate-900 border border-cyan-500/40 shadow-2xl p-2 animate-pulse">
+              <img src="/logo.png" alt="CodePush" className="h-full w-full object-cover rounded-xl" />
+            </div>
+            <div className="absolute -inset-2 rounded-3xl border border-cyan-500/30 animate-ping pointer-events-none" />
+          </div>
+          <div className="flex items-center space-x-2 font-mono text-xs text-cyan-400 font-extrabold tracking-wider uppercase bg-slate-900/90 px-4 py-2 rounded-full border border-cyan-500/40 shadow-xl">
+            <div className="h-2 w-2 rounded-full bg-cyan-400 animate-ping" />
+            <span>Verifying Security Session...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthScreen onLoginSuccess={handleLoginSuccess} theme={theme} onToggleTheme={toggleTheme} />;
+  }
+
   return (
     <div
-      className={`h-screen w-screen overflow-hidden font-sans flex transition-colors duration-500 relative ${
-        isDark
-          ? 'bg-slate-950 text-slate-100 selection:bg-cyan-500 selection:text-slate-950'
-          : 'bg-gradient-to-br from-indigo-200/90 via-sky-200/80 to-purple-200/90 text-slate-900 selection:bg-cyan-500 selection:text-white'
-      }`}
+      className={`h-screen w-screen overflow-hidden font-sans flex transition-colors duration-500 relative ${isDark
+        ? 'bg-slate-950 text-slate-100 selection:bg-cyan-500 selection:text-slate-950'
+        : 'bg-gradient-to-br from-indigo-200/90 via-sky-200/80 to-purple-200/90 text-slate-900 selection:bg-cyan-500 selection:text-white'
+        }`}
     >
       {/* Full Screen Theme Transition Ripple Overlay */}
       {isThemeTransitioning && (
         <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden flex items-center justify-center">
           <div
-            className={`w-96 h-96 rounded-full animate-theme-ripple ${
-              isDark
-                ? 'bg-gradient-to-r from-slate-900 via-slate-950 to-cyan-950'
-                : 'bg-gradient-to-tr from-cyan-400 via-indigo-400 to-pink-500'
-            }`}
+            className={`w-96 h-96 rounded-full animate-theme-ripple ${isDark
+              ? 'bg-gradient-to-r from-slate-900 via-slate-950 to-cyan-950'
+              : 'bg-gradient-to-tr from-cyan-400 via-indigo-400 to-pink-500'
+              }`}
           />
         </div>
       )}
@@ -225,6 +326,8 @@ export const App: React.FC = () => {
           theme={theme}
           onToggleTheme={toggleTheme}
           onToggleNotifications={toggleNotifications}
+          user={user}
+          onSignOut={handleSignOut}
         />
 
         {/* Right Side Notification Drawer Slide-Over */}
@@ -240,11 +343,10 @@ export const App: React.FC = () => {
           {/* Toast Notification */}
           {toastMessage && (
             <div
-              className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl shadow-2xl flex items-center space-x-2 text-sm animate-bounce ${
-                isDark
-                  ? 'bg-slate-900 border border-cyan-500/50 text-cyan-300'
-                  : 'bg-gradient-to-r from-cyan-100 via-sky-100 to-indigo-100 border border-cyan-500 text-cyan-950 shadow-2xl shadow-cyan-500/20'
-              }`}
+              className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl shadow-2xl flex items-center space-x-2 text-sm animate-bounce ${isDark
+                ? 'bg-slate-900 border border-cyan-500/50 text-cyan-300'
+                : 'bg-gradient-to-r from-cyan-100 via-sky-100 to-indigo-100 border border-cyan-500 text-cyan-950 shadow-2xl shadow-cyan-500/20'
+                }`}
             >
               <Sparkles className="h-4 w-4 text-cyan-500 shrink-0" />
               <span>{toastMessage}</span>

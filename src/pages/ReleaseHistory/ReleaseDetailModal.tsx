@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import type { ReleaseHistoryItem, TimelineEvent } from '../types';
+import type { ReleaseHistoryItem, TimelineEvent } from '../../types';
 import {
   X,
   Smartphone,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { ReleaseHistoryItem } from '../types';
+import type { ReleaseHistoryItem } from '../../types';
 import {
   ArrowLeft,
   Smartphone,
@@ -517,5 +517,3 @@ export const ReleaseDetailScreen: React.FC<Props> = ({ item, onBack, theme = 'da
     </div>
   );
 };
-
-

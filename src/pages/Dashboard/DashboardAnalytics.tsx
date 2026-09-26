@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Activity, ShieldCheck, Zap, HardDrive, ArrowUpRight, CheckCircle2, Clock, Smartphone, Apple } from 'lucide-react';
-import type { ReleaseHistoryItem } from '../types';
+import type { ReleaseHistoryItem } from '../../types';
+import { DashboardSkeleton } from '../../components/SkeletonLoader';
 
 interface AnalyticsProps {
   totalReleases: number;
@@ -8,6 +9,7 @@ interface AnalyticsProps {
   iosVersion: string;
   history?: ReleaseHistoryItem[];
   theme?: 'dark' | 'light';
+  isLoading?: boolean;
 }
 
 function formatTimeAgo(isoString: string): string {
@@ -31,11 +33,16 @@ export const DashboardAnalytics: React.FC<AnalyticsProps> = ({
   iosVersion,
   history = [],
   theme = 'dark',
+  isLoading = false,
 }) => {
   const isDark = theme === 'dark';
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [checkUpdateStatus, setCheckUpdateStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const [releasesStatus, setReleasesStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+
+  if (isLoading) {
+    return <DashboardSkeleton theme={theme} />;
+  }
 
   useEffect(() => {
     let isMounted = true;
@@ -101,11 +108,10 @@ export const DashboardAnalytics: React.FC<AnalyticsProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Metric 1: Total Bundles */}
         <div
-          className={`p-5 rounded-2xl border backdrop-blur-md relative overflow-hidden group transition-all duration-300 ${
-            isDark
+          className={`p-5 rounded-2xl border backdrop-blur-md relative overflow-hidden group transition-all duration-300 ${isDark
               ? 'bg-slate-900/40 border-slate-800 text-slate-100 hover:border-slate-700'
               : 'bg-gradient-to-br from-cyan-50/95 via-sky-100/90 to-blue-100/80 border-cyan-200/90 text-slate-900 shadow-xl shadow-cyan-500/10 hover:shadow-cyan-500/20'
-          }`}
+            }`}
         >
           <div className="flex items-center justify-between">
             <span className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-cyan-900'}`}>
@@ -130,11 +136,10 @@ export const DashboardAnalytics: React.FC<AnalyticsProps> = ({
 
         {/* Metric 2: Live Latency */}
         <div
-          className={`p-5 rounded-2xl border backdrop-blur-md relative overflow-hidden group transition-all duration-300 ${
-            isDark
+          className={`p-5 rounded-2xl border backdrop-blur-md relative overflow-hidden group transition-all duration-300 ${isDark
               ? 'bg-slate-900/40 border-slate-800 text-slate-100 hover:border-slate-700'
               : 'bg-gradient-to-br from-emerald-50/95 via-teal-100/90 to-emerald-100/80 border-emerald-200/90 text-slate-900 shadow-xl shadow-emerald-500/10 hover:shadow-emerald-500/20'
-          }`}
+            }`}
         >
           <div className="flex items-center justify-between">
             <span className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-emerald-900'}`}>
@@ -159,11 +164,10 @@ export const DashboardAnalytics: React.FC<AnalyticsProps> = ({
 
         {/* Metric 3: Total Bundle Storage */}
         <div
-          className={`p-5 rounded-2xl border backdrop-blur-md relative overflow-hidden group transition-all duration-300 ${
-            isDark
+          className={`p-5 rounded-2xl border backdrop-blur-md relative overflow-hidden group transition-all duration-300 ${isDark
               ? 'bg-slate-900/40 border-slate-800 text-slate-100 hover:border-slate-700'
               : 'bg-gradient-to-br from-purple-50/95 via-indigo-100/90 to-purple-100/80 border-purple-200/90 text-slate-900 shadow-xl shadow-purple-500/10 hover:shadow-purple-500/20'
-          }`}
+            }`}
         >
           <div className="flex items-center justify-between">
             <span className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-purple-900'}`}>
@@ -191,11 +195,10 @@ export const DashboardAnalytics: React.FC<AnalyticsProps> = ({
 
         {/* Metric 4: SHA-256 Security */}
         <div
-          className={`p-5 rounded-2xl border backdrop-blur-md relative overflow-hidden group transition-all duration-300 ${
-            isDark
+          className={`p-5 rounded-2xl border backdrop-blur-md relative overflow-hidden group transition-all duration-300 ${isDark
               ? 'bg-slate-900/40 border-slate-800 text-slate-100 hover:border-slate-700'
               : 'bg-gradient-to-br from-blue-50/95 via-indigo-100/90 to-sky-100/80 border-blue-200/90 text-slate-900 shadow-xl shadow-blue-500/10 hover:shadow-blue-500/20'
-          }`}
+            }`}
         >
           <div className="flex items-center justify-between">
             <span className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-blue-900'}`}>
@@ -223,11 +226,10 @@ export const DashboardAnalytics: React.FC<AnalyticsProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Activity Feed */}
         <div
-          className={`lg:col-span-2 rounded-2xl border p-6 backdrop-blur-md transition-all duration-300 ${
-            isDark
+          className={`lg:col-span-2 rounded-2xl border p-6 backdrop-blur-md transition-all duration-300 ${isDark
               ? 'border-slate-800 bg-slate-900/40 text-slate-100 shadow-xl'
               : 'border-indigo-300/90 bg-gradient-to-br from-sky-100/95 via-indigo-100/90 to-purple-100/95 text-slate-900 shadow-xl shadow-indigo-500/10'
-          }`}
+            }`}
         >
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-2">
@@ -247,11 +249,10 @@ export const DashboardAnalytics: React.FC<AnalyticsProps> = ({
               activityEvents.map((evt) => (
                 <div
                   key={evt.id}
-                  className={`flex items-start justify-between p-3.5 rounded-xl border text-xs transition-colors ${
-                    isDark
+                  className={`flex items-start justify-between p-3.5 rounded-xl border text-xs transition-colors ${isDark
                       ? 'bg-slate-950/60 border-slate-800/80 text-slate-300 hover:border-slate-700'
                       : 'bg-sky-100/90 border-indigo-200 text-slate-900 shadow-xs hover:border-indigo-300'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-start space-x-3">
                     <div className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-500 mt-0.5">
@@ -286,11 +287,10 @@ export const DashboardAnalytics: React.FC<AnalyticsProps> = ({
 
         {/* Server Endpoint Health Widget */}
         <div
-          className={`rounded-2xl border p-6 backdrop-blur-md flex flex-col justify-between transition-all duration-300 ${
-            isDark
+          className={`rounded-2xl border p-6 backdrop-blur-md flex flex-col justify-between transition-all duration-300 ${isDark
               ? 'border-slate-800 bg-slate-900/40 text-slate-100 shadow-xl'
               : 'border-teal-300/90 bg-gradient-to-br from-teal-100/95 via-sky-100/90 to-indigo-100/95 text-slate-900 shadow-xl shadow-indigo-500/10'
-          }`}
+            }`}
         >
           <div>
             <h3 className={`text-sm font-bold mb-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
