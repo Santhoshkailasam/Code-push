@@ -85,10 +85,11 @@ exports.handler = async (event) => {
     const store = await getReleaseData();
     const targetPlatform = platform.toLowerCase();
 
-    // Store base64 ZIP bundle if provided
+    // Store base64 ZIP bundle if provided (Replace dots for Firebase RTDB key compliance)
+    const versionKey = version ? version.replace(/\./g, '_') : 'latest';
     if (!store.bundles) store.bundles = {};
     if (bundleBase64) {
-      store.bundles[`${targetPlatform}_${version}`] = bundleBase64;
+      store.bundles[`${targetPlatform}_${versionKey}`] = bundleBase64;
       store.bundles[targetPlatform] = bundleBase64;
     }
 

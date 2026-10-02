@@ -12,10 +12,12 @@ exports.handler = async (event) => {
 
     const store = await getReleaseData();
 
+    const versionKey = version ? version.replace(/\./g, '_') : null;
+
     let bundleBase64 = null;
 
-    if (version && store.bundles && store.bundles[`${platform}_${version}`]) {
-      bundleBase64 = store.bundles[`${platform}_${version}`];
+    if (versionKey && store.bundles && store.bundles[`${platform}_${versionKey}`]) {
+      bundleBase64 = store.bundles[`${platform}_${versionKey}`];
     } else if (store.bundles && store.bundles[platform]) {
       bundleBase64 = store.bundles[platform];
     } else if (store[platform] && store[platform].bundleBase64) {
