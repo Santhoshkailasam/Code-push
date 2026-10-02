@@ -1,9 +1,10 @@
-const store = require('./store.cjs');
+const { getReleaseData } = require('./store.cjs');
 
 exports.handler = async (event) => {
   const method = event.httpMethod;
 
   if (method === 'GET') {
+    const store = await getReleaseData();
     return {
       statusCode: 200,
       headers: {

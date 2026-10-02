@@ -68,7 +68,8 @@ exports.handler = async (event) => {
       };
     }
 
-    const store = require('./store.cjs');
+    const { getReleaseData, setReleaseData } = require('./store.cjs');
+    const store = await getReleaseData();
 
     const newRelease = {
       id: `rel_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -87,7 +88,10 @@ exports.handler = async (event) => {
 
     const targetPlatform = platform.toLowerCase();
     store[targetPlatform] = newRelease;
+    if (!store.history) store.history = [];
     store.history.unshift(newRelease);
+
+    await setReleaseData(store);
 
     return {
       statusCode: 200,

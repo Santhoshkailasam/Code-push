@@ -1,8 +1,10 @@
-const store = require('./store.cjs');
+const { getReleaseData } = require('./store.cjs');
 
 exports.handler = async (event) => {
   const platform = event.queryStringParameters ? event.queryStringParameters.platform : null; // 'android' or 'ios'
   const currentVersion = event.queryStringParameters ? event.queryStringParameters.currentVersion : null; // e.g. '1.0.0'
+
+  const store = await getReleaseData();
 
   if (!platform || !store[platform]) {
     return {
