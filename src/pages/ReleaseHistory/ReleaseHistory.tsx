@@ -290,8 +290,15 @@ export const ReleaseHistory: React.FC<Props> = ({
                       {item.releaseNotes}
                     </td>
 
-                    <td className={`py-3.5 px-4 whitespace-nowrap font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                      {new Date(item.createdAt).toLocaleDateString()}
+                    <td className={`py-3.5 px-4 whitespace-nowrap font-medium font-mono text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                      {new Date(item.createdAt).toLocaleString([], {
+                        year: 'numeric',
+                        month: 'numeric',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                      })}
                     </td>
 
                     <td className="py-3.5 px-4 text-right">

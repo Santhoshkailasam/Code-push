@@ -1,27 +1,49 @@
 import type { VersionData } from '../types';
 import initialVersionData from '../../version.json';
 import {
-  initFirebaseDb,
-  subscribeToFirebaseVersionData,
   saveFirebaseVersionData,
   deleteFirebaseReleaseRecord,
   clearFirebaseDb,
 } from '../../db/firebaseStorage';
 
+const REALTIME_DB_URL = 'https://tracker-42b47-default-rtdb.asia-southeast1.firebasedatabase.app/codepush_releases.json';
+
 export async function loadVersionDataAsync(): Promise<VersionData> {
   try {
-    const firebaseData = await initFirebaseDb();
-    if (firebaseData) {
-      return firebaseData;
+    const res = await fetch(REALTIME_DB_URL);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && (data.android || data.history)) {
+        const historyList = Array.isArray(data.history) ? data.history : [];
+        const sortedHistory = historyList.sort(
+          (a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+        );
+        return {
+          android: data.android || (initialVersionData as any).android,
+          ios: data.ios || (initialVersionData as any).ios,
+          history: sortedHistory,
+        };
+      }
     }
   } catch (e) {
-    console.warn('Firebase Firestore load error:', e);
+    console.warn('Firebase Realtime DB load error:', e);
   }
   return loadVersionDataSync();
 }
 
 export function subscribeToVersionData(onData: (data: VersionData) => void): () => void {
-  return subscribeToFirebaseVersionData(onData);
+  // Fetch immediately
+  loadVersionDataAsync().then(onData).catch(() => {});
+
+  // Poll every 4 seconds for live multi-user dashboard updates
+  const interval = setInterval(async () => {
+    try {
+      const fresh = await loadVersionDataAsync();
+      onData(fresh);
+    } catch {}
+  }, 4000);
+
+  return () => clearInterval(interval);
 }
 
 export function loadVersionDataSync(): VersionData {
@@ -30,7 +52,7 @@ export function loadVersionDataSync(): VersionData {
 
 export function saveVersionData(data: VersionData): void {
   saveFirebaseVersionData(data).catch((err) =>
-    console.error('Failed to execute Firebase Firestore write:', err)
+    console.error('Failed to execute Firebase write:', err)
   );
 }
 
