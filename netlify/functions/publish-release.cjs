@@ -43,14 +43,15 @@ exports.handler = async (event) => {
     const authHeader = event.headers['authorization'] || event.headers['x-codepush-api-key'];
     const apiKey = authHeader ? authHeader.replace(/^Bearer\s+/i, '') : null;
 
-    // Verify API Key
-    if (!apiKey || apiKey !== VALID_API_KEY) {
+    // Verify API Key (Matches server VALID_API_KEY or user-generated cp_live_* key)
+    const isValidKey = apiKey && (apiKey === VALID_API_KEY || apiKey.startsWith('cp_live_'));
+    if (!isValidKey) {
       return {
         statusCode: 401,
         headers,
         body: JSON.stringify({
           error: 'Unauthorized: Invalid or missing CodePush API Key.',
-          tip: 'Set your secret in GitHub Secrets as CODEPUSH_API_KEY'
+          tip: 'Generate your API Key in your CodePush Dashboard Profile screen'
         }),
       };
     }
@@ -93,6 +94,7 @@ exports.handler = async (event) => {
       releaseNotes: releaseNotes || `Auto-published from GitHub Action build #${version}`,
       minAppVersion: minAppVersion || '1.0.0',
       downloadUrl,
+      apiKey: apiKey,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       source: 'github-actions'
@@ -100,6 +102,12 @@ exports.handler = async (event) => {
 
     const targetPlatform = platform.toLowerCase();
     store[targetPlatform] = newRelease;
+    
+    // Store per-API Key scoped release channel
+    if (!store.keys) store.keys = {};
+    if (!store.keys[apiKey]) store.keys[apiKey] = {};
+    store.keys[apiKey][targetPlatform] = newRelease;
+
     if (!store.history) store.history = [];
     store.history.unshift(newRelease);
 

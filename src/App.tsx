@@ -9,6 +9,7 @@ import { BundleUploader } from './pages/PublishUpdates/BundleUploader';
 import { ReleaseHistory } from './pages/ReleaseHistory/ReleaseHistory';
 import { ReleaseDetailScreen } from './pages/ReleaseHistory/ReleaseDetailScreen';
 import { IntegrationDocs } from './pages/IntegrationDocs/IntegrationDocs';
+import { ProfileScreen } from './pages/Profile/ProfileScreen';
 import { AuthScreen } from './pages/Auth/AuthScreen';
 import { SessionExpiryModal } from './components/SessionExpiryModal';
 import type { VersionData, Platform, ReleaseHistoryItem } from './types';
@@ -365,6 +366,7 @@ export const App: React.FC = () => {
           onToggleNotifications={toggleNotifications}
           user={user}
           onSignOut={handleSignOut}
+          onNavigateToProfile={() => setActiveTab('profile')}
         />
 
         {/* Right Side Notification Drawer Slide-Over */}
@@ -438,10 +440,15 @@ export const App: React.FC = () => {
             </div>
           )}
 
-          {/* SCREEN 4: INTEGRATION DOCS */}
+          {/* SCREEN 4: PROFILE & API KEYS */}
+          {activeTab === 'profile' && (
+            <ProfileScreen user={user} theme={theme} showToast={showToast} />
+          )}
+
+          {/* SCREEN 5: INTEGRATION DOCS */}
           {activeTab === 'docs' && <IntegrationDocs theme={theme} />}
 
-          {/* SCREEN 5: RELEASE DETAIL & PLAIN-ENGLISH TIMELINE SCREEN */}
+          {/* SCREEN 6: RELEASE DETAIL & PLAIN-ENGLISH TIMELINE SCREEN */}
           {activeTab === 'release-detail' && selectedReleaseForDetail && (
             <ReleaseDetailScreen
               item={selectedReleaseForDetail}

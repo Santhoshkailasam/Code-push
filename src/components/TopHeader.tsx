@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PanelLeftClose, PanelLeftOpen, Bell, User, Clock, ChevronDown, Sun, Moon, LogOut, ShieldCheck } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, Bell, User, Clock, ChevronDown, Sun, Moon, LogOut, ShieldCheck, KeyRound } from 'lucide-react';
 
 interface TopHeaderProps {
   onToggleSidebar: () => void;
@@ -15,6 +15,7 @@ interface TopHeaderProps {
     photoURL?: string | null;
   } | null;
   onSignOut?: () => void;
+  onNavigateToProfile?: () => void;
 }
 
 export const TopHeader: React.FC<TopHeaderProps> = ({
@@ -26,6 +27,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   onToggleNotifications,
   user,
   onSignOut,
+  onNavigateToProfile,
 }) => {
   const [currentTime, setCurrentTime] = useState<string>('');
   const [isSpinning, setIsSpinning] = useState(false);
@@ -54,6 +56,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
     dashboard: 'Dashboard Overview',
     publish: 'Publish OTA Update',
     history: 'Release History & Rollbacks',
+    profile: 'Profile & API Keys',
     docs: 'Integration Documentation',
   };
 
@@ -190,6 +193,19 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                   <span>Authenticated • Session Secure</span>
                 </div>
               </div>
+
+              {onNavigateToProfile && (
+                <button
+                  onClick={() => {
+                    setShowUserDropdown(false);
+                    onNavigateToProfile();
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-cyan-500 hover:bg-cyan-500/15 flex items-center space-x-2 transition-colors cursor-pointer mb-1"
+                >
+                  <KeyRound className="h-4 w-4 text-cyan-400" />
+                  <span>Profile & API Keys</span>
+                </button>
+              )}
 
               {onSignOut && (
                 <button

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layers, UploadCloud, History, BookOpen, Server, ShieldCheck } from 'lucide-react';
+import { Layers, UploadCloud, History, BookOpen, Server, ShieldCheck, KeyRound } from 'lucide-react';
 
 interface SidebarProps {
   activeTab: string;
@@ -19,6 +19,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'dashboard', label: 'Dashboard', icon: Layers },
     { id: 'publish', label: 'Publish Update', icon: UploadCloud },
     { id: 'history', label: 'Release History', icon: History },
+    { id: 'profile', label: 'Profile & API Keys', icon: KeyRound },
     { id: 'docs', label: 'Integration Docs', icon: BookOpen },
   ];
 
