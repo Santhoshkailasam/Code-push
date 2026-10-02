@@ -3,7 +3,7 @@
  * Handles automated release publishing via GitHub Actions CI/CD pipeline or API POST requests.
  */
 
-const VALID_API_KEY = process.env.CODEPUSH_API_KEY || 'cp_live_sec_key_demo_2026';
+const VALID_API_KEY = process.env.CODEPUSH_API_KEY;
 
 exports.handler = async (event) => {
   // CORS Headers
@@ -32,6 +32,14 @@ exports.handler = async (event) => {
   }
 
   try {
+    if (!VALID_API_KEY) {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: 'Server Configuration Error: CODEPUSH_API_KEY environment variable is not configured.' }),
+      };
+    }
+
     const authHeader = event.headers['authorization'] || event.headers['x-codepush-api-key'];
     const apiKey = authHeader ? authHeader.replace(/^Bearer\s+/i, '') : null;
 
