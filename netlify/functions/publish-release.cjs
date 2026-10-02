@@ -55,7 +55,13 @@ exports.handler = async (event) => {
       };
     }
 
-    const payload = JSON.parse(event.body || '{}');
+    let payload = {};
+    if (event.body) {
+      const bodyStr = event.isBase64Encoded
+        ? Buffer.from(event.body, 'base64').toString('utf8')
+        : event.body;
+      payload = typeof bodyStr === 'object' ? bodyStr : JSON.parse(bodyStr);
+    }
     const { platform, version, downloadUrl, hash, releaseNotes, mandatory, minAppVersion } = payload;
 
     if (!platform || !version || !downloadUrl) {
