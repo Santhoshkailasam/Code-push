@@ -10,6 +10,7 @@ import { ReleaseHistory } from './pages/ReleaseHistory/ReleaseHistory';
 import { ReleaseDetailScreen } from './pages/ReleaseHistory/ReleaseDetailScreen';
 import { IntegrationDocs } from './pages/IntegrationDocs/IntegrationDocs';
 import { AuthScreen } from './pages/Auth/AuthScreen';
+import { SessionExpiryModal } from './components/SessionExpiryModal';
 import type { VersionData, Platform, ReleaseHistoryItem } from './types';
 import {
   loadVersionDataAsync,
@@ -21,15 +22,13 @@ import {
 import { auth } from '../db/firebaseConfig';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { Sparkles } from 'lucide-react';
+import {
+  type AuthTokenSession,
+  extractTokenSession,
+  getValidAccessToken,
+} from './utils/tokenManager';
 
-export interface UserSession {
-  uid: string;
-  email: string | null;
-  displayName: string | null;
-  photoURL?: string | null;
-  accessToken?: string;
-  refreshToken?: string;
-}
+export type UserSession = AuthTokenSession;
 
 export const App: React.FC = () => {
   const [user, setUser] = useState<UserSession | null>(() => {
@@ -49,6 +48,7 @@ export const App: React.FC = () => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isThemeTransitioning, setIsThemeTransitioning] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [isExpiryModalOpen, setIsExpiryModalOpen] = useState(false);
 
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
@@ -56,20 +56,12 @@ export const App: React.FC = () => {
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser) {
-        const token = await fbUser.getIdToken();
-        const userObj: UserSession = {
-          uid: fbUser.uid,
-          email: fbUser.email,
-          displayName: fbUser.displayName || fbUser.email?.split('@')[0] || 'Developer',
-          photoURL: fbUser.photoURL,
-          accessToken: token,
-          refreshToken: fbUser.refreshToken,
-        };
-        setUser(userObj);
         try {
+          const userObj = await extractTokenSession(fbUser);
+          setUser(userObj);
           localStorage.setItem('codepush_cached_user', JSON.stringify(userObj));
-        } catch (e) {
-          console.warn('Cache write failed:', e);
+        } catch (err) {
+          console.warn('Could not extract token session:', err);
         }
       } else {
         setUser(null);
@@ -81,6 +73,51 @@ export const App: React.FC = () => {
     return () => unsubscribeAuth();
   }, []);
 
+  // Periodic token expiration & auto-relogin modal checker
+  useEffect(() => {
+    if (!user) return;
+
+    const interval = setInterval(async () => {
+      const now = Date.now();
+
+      // Check 1: If Refresh Token has expired (e.g. 30 days in .env)
+      if (user.refreshTokenExpiresAt && now >= user.refreshTokenExpiresAt) {
+        console.warn('Refresh token expired (30-day lifetime ended). Forcing logout:');
+        handleSignOut();
+        setIsExpiryModalOpen(false);
+        showToast('Session Expired: Your refresh token has expired. Please log in again.');
+        return;
+      }
+
+      // Check 2: Show centered modal before Access Token expires (within 15s or expired)
+      if (user.expiresAt && now >= user.expiresAt - 15000) {
+        if (!isExpiryModalOpen) {
+          setIsExpiryModalOpen(true);
+        }
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [user, isExpiryModalOpen]);
+
+  const handleContinueSession = async () => {
+    try {
+      await getValidAccessToken(true);
+      const cachedRaw = localStorage.getItem('codepush_cached_user');
+      if (cachedRaw) {
+        const freshUser = JSON.parse(cachedRaw);
+        setUser(freshUser);
+      }
+      setIsExpiryModalOpen(false);
+      showToast('Session Extended! Access token successfully refreshed for another minute.');
+    } catch (err) {
+      console.error('Failed to extend session:', err);
+      handleSignOut();
+      setIsExpiryModalOpen(false);
+      showToast('Session renewal failed. Please log in again.');
+    }
+  };
+
   const handleLoginSuccess = (userData: UserSession) => {
     setUser(userData);
     try {
@@ -88,7 +125,7 @@ export const App: React.FC = () => {
     } catch (e) {
       console.warn('Cache write failed:', e);
     }
-    showToast(`Welcome back, ${userData.displayName || 'Developer'}! Security tokens verified.`);
+    showToast(`Welcome back, ${userData.displayName || 'Developer'}! Security access tokens verified.`);
   };
 
   const handleSignOut = async () => {
@@ -414,6 +451,20 @@ export const App: React.FC = () => {
           )}
         </main>
       </div>
+
+      {/* Centered Session Expiry Warning Modal */}
+      {user && (
+        <SessionExpiryModal
+          isOpen={isExpiryModalOpen}
+          expiresAt={user.expiresAt}
+          onContinue={handleContinueSession}
+          onRelogin={() => {
+            setIsExpiryModalOpen(false);
+            handleSignOut();
+          }}
+          theme={theme}
+        />
+      )}
     </div>
   );
 };

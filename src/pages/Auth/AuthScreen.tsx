@@ -26,16 +26,10 @@ import {
 } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, googleProvider, db } from '../../../db/firebaseConfig';
+import { extractTokenSession, type AuthTokenSession } from '../../utils/tokenManager';
 
 interface AuthScreenProps {
-  onLoginSuccess: (userData: {
-    uid: string;
-    email: string | null;
-    displayName: string | null;
-    photoURL?: string | null;
-    accessToken?: string;
-    refreshToken?: string;
-  }) => void;
+  onLoginSuccess: (tokenSession: AuthTokenSession) => void;
   theme?: 'dark' | 'light';
   onToggleTheme?: () => void;
 }
@@ -148,19 +142,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
-      const idToken = await user.getIdToken();
+      const tokenSession = await extractTokenSession(user);
       await syncUserToFirestore(user);
 
       showToast(`Welcome ${user.displayName || 'Developer'}! Google Sign-In successful.`, 'success');
 
-      onLoginSuccess({
-        uid: user.uid,
-        email: user.email,
-        displayName: user.displayName || 'Developer',
-        photoURL: user.photoURL,
-        accessToken: idToken,
-        refreshToken: user.refreshToken,
-      });
+      onLoginSuccess(tokenSession);
     } catch (err: any) {
       console.error('Live Google Sign-In Error:', err);
       const msg = formatAuthError(err);
@@ -211,38 +198,24 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
       if (mode === 'login') {
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
-        const idToken = await user.getIdToken();
+        const tokenSession = await extractTokenSession(user);
         await syncUserToFirestore(user);
 
         showToast(`Welcome back, ${user.displayName || email.split('@')[0]}!`, 'success');
 
-        onLoginSuccess({
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName || name || (user.email ? user.email.split('@')[0] : null),
-          photoURL: user.photoURL,
-          accessToken: idToken,
-          refreshToken: user.refreshToken,
-        });
+        onLoginSuccess(tokenSession);
       } else {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
         if (name && auth.currentUser) {
           await updateProfile(auth.currentUser, { displayName: name });
         }
-        const idToken = await user.getIdToken();
+        const tokenSession = await extractTokenSession(user);
         await syncUserToFirestore(user, name);
 
         showToast(`Account created successfully! Welcome, ${name || email.split('@')[0]}.`, 'success');
 
-        onLoginSuccess({
-          uid: user.uid,
-          email: user.email,
-          displayName: name || (user.email ? user.email.split('@')[0] : null),
-          photoURL: user.photoURL,
-          accessToken: idToken,
-          refreshToken: user.refreshToken,
-        });
+        onLoginSuccess(tokenSession);
       }
     } catch (err: any) {
       console.error('Live Firebase Authentication Error:', err);

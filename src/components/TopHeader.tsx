@@ -187,7 +187,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                 <div className="text-[11px] text-slate-400 truncate">{user?.email || 'admin@codepush.io'}</div>
                 <div className="inline-flex items-center space-x-1 mt-1.5 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[9px] font-mono">
                   <ShieldCheck className="h-3 w-3" />
-                  <span>Authenticated • RSA-2048</span>
+                  <span>Authenticated • Session Secure</span>
                 </div>
               </div>
 
