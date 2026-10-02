@@ -1,4 +1,4 @@
-const versionData = require('../../version.json');
+const store = require('./store.cjs');
 
 exports.handler = async (event) => {
   const method = event.httpMethod;
@@ -10,7 +10,7 @@ exports.handler = async (event) => {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
       },
-      body: JSON.stringify(versionData),
+      body: JSON.stringify(store),
     };
   }
 

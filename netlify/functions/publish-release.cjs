@@ -68,10 +68,13 @@ exports.handler = async (event) => {
       };
     }
 
+    const store = require('./store.cjs');
+
     const newRelease = {
       id: `rel_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       platform: platform.toLowerCase(),
-      version,
+      latestVersion: version,
+      version: version,
       hash: hash || `sha256-${Math.random().toString(36).substring(2, 10)}`,
       mandatory: Boolean(mandatory),
       releaseNotes: releaseNotes || `Auto-published from GitHub Action build #${version}`,
@@ -81,6 +84,10 @@ exports.handler = async (event) => {
       updatedAt: new Date().toISOString(),
       source: 'github-actions'
     };
+
+    const targetPlatform = platform.toLowerCase();
+    store[targetPlatform] = newRelease;
+    store.history.unshift(newRelease);
 
     return {
       statusCode: 200,

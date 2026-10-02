@@ -1,10 +1,10 @@
-const versionData = require('../../version.json');
+const store = require('./store.cjs');
 
 exports.handler = async (event) => {
   const platform = event.queryStringParameters ? event.queryStringParameters.platform : null; // 'android' or 'ios'
   const currentVersion = event.queryStringParameters ? event.queryStringParameters.currentVersion : null; // e.g. '1.0.0'
 
-  if (!platform || !versionData[platform]) {
+  if (!platform || !store[platform]) {
     return {
       statusCode: 400,
       headers: { 
@@ -15,8 +15,9 @@ exports.handler = async (event) => {
     };
   }
 
-  const targetRelease = versionData[platform];
-  const updateAvailable = targetRelease.latestVersion !== currentVersion;
+  const targetRelease = store[platform];
+  const latestVersion = targetRelease.latestVersion || targetRelease.version;
+  const updateAvailable = latestVersion !== currentVersion;
 
   return {
     statusCode: 200,
@@ -27,7 +28,7 @@ exports.handler = async (event) => {
     body: JSON.stringify({
       updateAvailable,
       downloadUrl: updateAvailable ? targetRelease.downloadUrl : null,
-      latestVersion: targetRelease.latestVersion,
+      latestVersion: latestVersion,
       mandatory: targetRelease.mandatory,
       hash: targetRelease.hash,
       releaseNotes: targetRelease.releaseNotes,
