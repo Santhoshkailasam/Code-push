@@ -2,7 +2,7 @@
   "android": {
     "latestVersion": "1.0.0",
     "minAppVersion": "1.0.0",
-    "downloadUrl": "https://your-site.netlify.app/bundles/android-v1.0.0.zip",
+    "downloadUrl": "https://codepushs.netlify.app/bundles/android-v1.0.0.zip",
     "mandatory": false,
     "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "releaseNotes": "Initial production release",
@@ -11,7 +11,7 @@
   "ios": {
     "latestVersion": "1.0.0",
     "minAppVersion": "1.0.0",
-    "downloadUrl": "https://your-site.netlify.app/bundles/ios-v1.0.0.zip",
+    "downloadUrl": "https://codepushs.netlify.app/bundles/ios-v1.0.0.zip",
     "mandatory": false,
     "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "releaseNotes": "Initial production release",
