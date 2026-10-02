@@ -56,11 +56,17 @@ exports.handler = async (event) => {
     }
 
     let payload = {};
-    if (event.body) {
+    if (typeof event.body === 'object' && event.body !== null) {
+      payload = event.body;
+    } else if (typeof event.body === 'string') {
       const bodyStr = event.isBase64Encoded
         ? Buffer.from(event.body, 'base64').toString('utf8')
         : event.body;
-      payload = typeof bodyStr === 'object' ? bodyStr : JSON.parse(bodyStr);
+      try {
+        payload = JSON.parse(bodyStr);
+      } catch (e) {
+        payload = {};
+      }
     }
     const { platform, version, downloadUrl, hash, releaseNotes, mandatory, minAppVersion } = payload;
 
