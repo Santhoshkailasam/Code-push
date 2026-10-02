@@ -1,34 +1,28 @@
 const initialVersionData = require('../../version.json');
-
-let memoryStore = {
-  android: initialVersionData.android,
-  ios: initialVersionData.ios,
-  history: initialVersionData.history || []
-};
+const FIREBASE_DB_URL = 'https://tracker-42b47-default-rtdb.asia-southeast1.firebasedatabase.app/codepush_releases.json';
 
 async function getReleaseData() {
   try {
-    const { getStore } = require('@netlify/blobs');
-    const store = getStore('codepush_releases');
-    const data = await store.get('latest_releases', { type: 'json' });
-    if (data) {
-      memoryStore = data;
-      return data;
+    const res = await fetch(FIREBASE_DB_URL);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.android) return data;
     }
   } catch (err) {
-    // Memory store fallback
+    console.warn('[CodePush Store] Firebase fetch error:', err.message);
   }
-  return memoryStore;
+  return initialVersionData;
 }
 
 async function setReleaseData(data) {
-  memoryStore = data;
   try {
-    const { getStore } = require('@netlify/blobs');
-    const store = getStore('codepush_releases');
-    await store.setJSON('latest_releases', data);
+    await fetch(FIREBASE_DB_URL, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
   } catch (err) {
-    // Memory store fallback
+    console.warn('[CodePush Store] Firebase save error:', err.message);
   }
 }
 
