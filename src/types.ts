@@ -38,6 +38,7 @@ export interface ReleaseHistoryItem {
   createdAt: string;
   downloadUrl?: string;
   sizeBytes?: number;
+  source?: string;
   timeline?: TimelineEvent[];
   adoptionStats?: AdoptionStats;
 }

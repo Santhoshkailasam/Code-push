@@ -69,38 +69,50 @@ exports.handler = async (event) => {
         payload = {};
       }
     }
-    const { platform, version, downloadUrl, hash, releaseNotes, mandatory, minAppVersion } = payload;
+    const { platform, version, downloadUrl, hash, releaseNotes, mandatory, minAppVersion, bundleBase64 } = payload;
 
-    if (!platform || !version || !downloadUrl) {
+    if (!platform || !version) {
       return {
         statusCode: 400,
         headers,
         body: JSON.stringify({
-          error: 'Missing required parameters. Required: platform (android|ios), version, downloadUrl.'
+          error: 'Missing required parameters. Required: platform (android|ios), version.'
         }),
       };
     }
 
     const { getReleaseData, setReleaseData } = require('./store.cjs');
     const store = await getReleaseData();
+    const targetPlatform = platform.toLowerCase();
+
+    // Store base64 ZIP bundle if provided
+    if (!store.bundles) store.bundles = {};
+    if (bundleBase64) {
+      store.bundles[`${targetPlatform}_${version}`] = bundleBase64;
+      store.bundles[targetPlatform] = bundleBase64;
+    }
+
+    // Determine public download URL (Use Netlify download-bundle endpoint if bundleBase64 exists or if downloadUrl missing/private)
+    const effectiveDownloadUrl = bundleBase64 || (!downloadUrl || downloadUrl.includes('github.com'))
+      ? `https://codepushs.netlify.app/.netlify/functions/download-bundle?version=${version}&platform=${targetPlatform}`
+      : downloadUrl;
 
     const newRelease = {
       id: `rel_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      platform: platform.toLowerCase(),
+      platform: targetPlatform,
       latestVersion: version,
       version: version,
       hash: hash || `sha256-${Math.random().toString(36).substring(2, 10)}`,
       mandatory: Boolean(mandatory),
       releaseNotes: releaseNotes || `Auto-published from GitHub Action build #${version}`,
       minAppVersion: minAppVersion || '1.0.0',
-      downloadUrl,
+      downloadUrl: effectiveDownloadUrl,
       apiKey: apiKey,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       source: 'github-actions'
     };
 
-    const targetPlatform = platform.toLowerCase();
     store[targetPlatform] = newRelease;
     
     // Store per-API Key scoped release channel
