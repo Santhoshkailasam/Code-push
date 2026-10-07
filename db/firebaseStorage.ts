@@ -20,7 +20,7 @@ const RELEASE_HISTORY_COLLECTION = 'codepush_release_history';
  * Initializes Firebase Firestore data or loads existing version data.
  * Validates active access token before making request.
  */
-export async function initFirebaseDb(): Promise<VersionData> {
+export async function initFirebaseDb(userId?: string, apiKey?: string): Promise<VersionData> {
   return executeAuthenticatedApiCall('Firestore/FetchVersionData', async () => {
     try {
       const activeDocRef = doc(db, ACTIVE_RELEASES_COLLECTION, ACTIVE_DOC_ID);
@@ -32,7 +32,7 @@ export async function initFirebaseDb(): Promise<VersionData> {
       const initialTyped = initialVersionData as unknown as VersionData;
 
       if (!activeDocSnap.exists() && historySnap.empty) {
-        await saveFirebaseVersionData(initialTyped);
+        await saveFirebaseVersionData(initialTyped, userId, apiKey);
         return initialTyped;
       }
 
@@ -47,7 +47,15 @@ export async function initFirebaseDb(): Promise<VersionData> {
 
       const historyItems: ReleaseHistoryItem[] = [];
       historySnap.forEach((docSnap) => {
-        historyItems.push(docSnap.data() as ReleaseHistoryItem);
+        const item = docSnap.data() as ReleaseHistoryItem;
+        if (!userId && !apiKey) {
+          historyItems.push(item);
+        } else if (
+          (userId && item.userId === userId) ||
+          (apiKey && item.apiKey === apiKey)
+        ) {
+          historyItems.push(item);
+        }
       });
 
       const sortedHistory = historyItems.sort(
@@ -70,7 +78,9 @@ export async function initFirebaseDb(): Promise<VersionData> {
  * Real-time listener for Firestore updates (multi-user live updates)
  */
 export function subscribeToFirebaseVersionData(
-  onData: (data: VersionData) => void
+  onData: (data: VersionData) => void,
+  userId?: string,
+  apiKey?: string
 ): () => void {
   try {
     const activeDocRef = doc(db, ACTIVE_RELEASES_COLLECTION, ACTIVE_DOC_ID);
@@ -81,7 +91,15 @@ export function subscribeToFirebaseVersionData(
         getDocs(historyCollRef).then((historySnap) => {
           const historyItems: ReleaseHistoryItem[] = [];
           historySnap.forEach((docSnap) => {
-            historyItems.push(docSnap.data() as ReleaseHistoryItem);
+            const item = docSnap.data() as ReleaseHistoryItem;
+            if (!userId && !apiKey) {
+              historyItems.push(item);
+            } else if (
+              (userId && item.userId === userId) ||
+              (apiKey && item.apiKey === apiKey)
+            ) {
+              historyItems.push(item);
+            }
           });
           const sortedHistory = historyItems.sort(
             (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -106,19 +124,28 @@ export function subscribeToFirebaseVersionData(
 /**
  * Saves current active releases and release history records to Firebase Firestore.
  */
-export async function saveFirebaseVersionData(data: VersionData): Promise<void> {
+export async function saveFirebaseVersionData(
+  data: VersionData,
+  userId?: string,
+  apiKey?: string
+): Promise<void> {
   return executeAuthenticatedApiCall('Firestore/SaveReleaseData', async () => {
     try {
       const activeDocRef = doc(db, ACTIVE_RELEASES_COLLECTION, ACTIVE_DOC_ID);
       await setDoc(activeDocRef, {
-        android: data.android,
-        ios: data.ios,
+        android: { ...data.android, ...(userId ? { userId } : {}), ...(apiKey ? { apiKey } : {}) },
+        ios: { ...data.ios, ...(userId ? { userId } : {}), ...(apiKey ? { apiKey } : {}) },
         updatedAt: new Date().toISOString(),
       });
 
       for (const item of data.history) {
+        const taggedItem = {
+          ...item,
+          ...(userId && !item.userId ? { userId } : {}),
+          ...(apiKey && !item.apiKey ? { apiKey } : {}),
+        };
         const itemRef = doc(db, RELEASE_HISTORY_COLLECTION, item.id);
-        await setDoc(itemRef, item);
+        await setDoc(itemRef, taggedItem);
       }
     } catch (err) {
       console.error('Failed to save to Firebase Firestore:', err);

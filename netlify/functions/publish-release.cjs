@@ -69,7 +69,8 @@ exports.handler = async (event) => {
         payload = {};
       }
     }
-    const { platform, version, downloadUrl, hash, releaseNotes, mandatory, minAppVersion, bundleBase64 } = payload;
+    const { platform, version, downloadUrl, hash, releaseNotes, mandatory, minAppVersion, bundleBase64, userId: bodyUserId } = payload;
+    const userId = bodyUserId || event.headers['x-user-id'];
 
     if (!platform || !version) {
       return {
@@ -109,6 +110,7 @@ exports.handler = async (event) => {
       minAppVersion: minAppVersion || '1.0.0',
       downloadUrl: effectiveDownloadUrl,
       apiKey: apiKey,
+      userId: userId,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       source: 'github-actions'
@@ -116,10 +118,18 @@ exports.handler = async (event) => {
 
     store[targetPlatform] = newRelease;
     
-    // Store per-API Key scoped release channel
-    if (!store.keys) store.keys = {};
-    if (!store.keys[apiKey]) store.keys[apiKey] = {};
-    store.keys[apiKey][targetPlatform] = newRelease;
+    // Store per-API Key and per-User ID scoped release channel
+    if (apiKey) {
+      if (!store.keys) store.keys = {};
+      if (!store.keys[apiKey]) store.keys[apiKey] = {};
+      store.keys[apiKey][targetPlatform] = newRelease;
+    }
+
+    if (userId) {
+      if (!store.users) store.users = {};
+      if (!store.users[userId]) store.users[userId] = {};
+      store.users[userId][targetPlatform] = newRelease;
+    }
 
     if (!store.history) store.history = [];
     store.history.unshift(newRelease);

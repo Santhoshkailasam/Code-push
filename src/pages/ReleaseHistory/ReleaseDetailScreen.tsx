@@ -50,34 +50,37 @@ export const ReleaseDetailScreen: React.FC<Props> = ({ item, onBack, theme = 'da
   const createdDate = new Date(item.createdAt || Date.now());
   const formattedCreated = createdDate.toLocaleString([], {
     year: 'numeric',
-    month: 'numeric',
+    month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
   });
 
-  // 100% Realtime Timeline based on actual release metadata
   const realTimeline = [
     {
       stepNumber: '1',
       icon: GitCommit,
       title: 'Git Commit & Code Push',
       subtitle: `Source: ${item.source || 'Developer / GitHub Push'}`,
-      description: item.releaseNotes || 'Developer committed changes and pushed to main branch.',
+      description: item.releaseNotes || 'Developer committed changes and pushed to branch.',
       time: formattedCreated,
       statusText: 'Completed',
-      badgeColor: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-600',
+      badgeColor: isDark
+        ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+        : 'bg-emerald-50 border-emerald-200 text-emerald-700',
     },
     {
       stepNumber: '2',
       icon: Layers,
       title: 'React Native Bundle Compilation',
       subtitle: `Target Platform: ${item.platform.toUpperCase()}`,
-      description: `GitHub Actions compiled the JS bundle (index.${item.platform}.bundle) and packaged it into ZIP archive.`,
+      description: `CI/CD compiled the JS bundle (index.${item.platform}.bundle) and packaged into ZIP archive.`,
       time: formattedCreated,
       statusText: 'Success',
-      badgeColor: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-600',
+      badgeColor: isDark
+        ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+        : 'bg-emerald-50 border-emerald-200 text-emerald-700',
     },
     {
       stepNumber: '3',
@@ -87,41 +90,48 @@ export const ReleaseDetailScreen: React.FC<Props> = ({ item, onBack, theme = 'da
       description: 'Calculated tamper-proof SHA256 signature to guarantee release integrity before distribution.',
       time: 'Verified',
       statusText: 'Verified',
-      badgeColor: 'bg-cyan-500/15 border-cyan-500/30 text-cyan-600',
+      badgeColor: isDark
+        ? 'bg-cyan-500/15 border-cyan-500/30 text-cyan-400'
+        : 'bg-cyan-50 border-cyan-200 text-cyan-700',
     },
     {
       stepNumber: '4',
       icon: Cloud,
-      title: 'Netlify Server & Firebase Sync',
+      title: 'Netlify Edge & Firestore Sync',
       subtitle: 'Realtime DB Endpoint Synced',
-      description: 'Release metadata was published to Netlify functions and synced across Firebase Realtime DB.',
+      description: 'Release metadata was published to Netlify functions and synced across Firestore.',
       time: 'Live in Cloud',
       statusText: 'Synced',
-      badgeColor: 'bg-purple-500/15 border-purple-500/30 text-purple-600',
+      badgeColor: isDark
+        ? 'bg-purple-500/15 border-purple-500/30 text-purple-400'
+        : 'bg-purple-50 border-purple-200 text-purple-700',
     },
     {
       stepNumber: '5',
       icon: Globe,
       title: 'Mobile App OTA Channel Active',
       subtitle: `Version: v${item.version} (${item.mandatory ? 'Mandatory' : 'Optional'})`,
-      description: `Mobile clients checking /.netlify/functions/check-update for ${item.platform.toUpperCase()} will receive this active release automatically.`,
+      description: `Mobile clients querying /.netlify/functions/check-update for ${item.platform.toUpperCase()} will receive this active release automatically.`,
       time: 'Active Now',
       statusText: 'Live for Clients',
-      badgeColor: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-600',
+      badgeColor: isDark
+        ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+        : 'bg-emerald-50 border-emerald-200 text-emerald-700',
     },
   ];
 
   return (
-    <div className="space-y-6 animate-tab-content max-w-6xl pb-12">
+    <div className="space-y-6 animate-fade-in max-w-6xl mx-auto pb-16">
       {/* Top Header & Back Navigation Button */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-center space-x-3">
           <button
+            type="button"
             onClick={onBack}
-            className={`p-2.5 rounded-xl border transition-all hover:scale-105 active:scale-95 cursor-pointer flex items-center space-x-2 font-bold text-xs ${
+            className={`px-4 py-2.5 rounded-2xl border transition-all hover:scale-105 active:scale-95 cursor-pointer flex items-center space-x-2 font-extrabold text-xs ${
               isDark
-                ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700 hover:text-white'
-                : 'bg-white border-purple-300 text-purple-950 hover:bg-purple-100 shadow-xs'
+                ? 'bg-slate-900 border-slate-800 text-slate-200 hover:bg-slate-800 hover:text-white'
+                : 'bg-white border-slate-200 text-slate-800 hover:bg-slate-50 shadow-sm'
             }`}
           >
             <ArrowLeft className="h-4 w-4" />
@@ -131,8 +141,12 @@ export const ReleaseDetailScreen: React.FC<Props> = ({ item, onBack, theme = 'da
           <span
             className={`text-xs font-mono font-bold px-3 py-1 rounded-full border ${
               isAndroid
-                ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-600'
-                : 'bg-blue-500/15 border-blue-500/30 text-blue-600'
+                ? isDark
+                  ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                  : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                : isDark
+                ? 'bg-blue-500/15 border-blue-500/30 text-blue-400'
+                : 'bg-blue-50 border-blue-200 text-blue-700'
             }`}
           >
             {item.platform.toUpperCase()} PLATFORM
@@ -140,8 +154,14 @@ export const ReleaseDetailScreen: React.FC<Props> = ({ item, onBack, theme = 'da
         </div>
 
         <div className="flex items-center space-x-2">
-          <div className="flex items-center space-x-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 text-xs font-bold">
-            <Radio className="h-3.5 w-3.5 animate-pulse text-emerald-400" />
+          <div
+            className={`flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
+              isDark
+                ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+            }`}
+          >
+            <Radio className="h-3.5 w-3.5 animate-pulse text-emerald-500" />
             <span>Realtime Server Release Status</span>
           </div>
         </div>
@@ -149,19 +169,27 @@ export const ReleaseDetailScreen: React.FC<Props> = ({ item, onBack, theme = 'da
 
       {/* Hero Banner Card */}
       <div
-        className={`rounded-3xl border p-6 sm:p-8 transition-all duration-300 relative overflow-hidden ${
+        className={`rounded-3xl border p-6 sm:p-8 transition-all duration-300 relative overflow-hidden shadow-xl ${
           isDark
-            ? 'border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/40 text-slate-100 shadow-2xl'
-            : 'border-purple-300/90 bg-gradient-to-br from-purple-100/95 via-indigo-100/90 to-sky-100/95 text-slate-900 shadow-xl shadow-purple-500/10'
+            ? 'border-slate-800 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 text-slate-100 shadow-slate-950/80'
+            : 'border-slate-200 bg-white text-slate-900 shadow-slate-200/60'
         }`}
       >
+        {!isDark && (
+          <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-cyan-400 via-blue-500 to-indigo-500" />
+        )}
+
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
           <div className="flex items-start space-x-4">
             <div
               className={`p-4 rounded-2xl border shrink-0 ${
                 isAndroid
-                  ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-500 shadow-lg shadow-emerald-500/10'
-                  : 'bg-blue-500/20 border-blue-500/40 text-blue-500 shadow-lg shadow-blue-500/10'
+                  ? isDark
+                    ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 shadow-lg shadow-emerald-500/10'
+                    : 'bg-emerald-50 border-emerald-200 text-emerald-600 shadow-md'
+                  : isDark
+                  ? 'bg-blue-500/20 border-blue-500/40 text-blue-400 shadow-lg shadow-blue-500/10'
+                  : 'bg-blue-50 border-blue-200 text-blue-600 shadow-md'
               }`}
             >
               {isAndroid ? <Smartphone className="h-8 w-8" /> : <Apple className="h-8 w-8" />}
@@ -175,26 +203,31 @@ export const ReleaseDetailScreen: React.FC<Props> = ({ item, onBack, theme = 'da
                 <span
                   className={`px-3 py-1 rounded-full text-xs font-bold uppercase border ${
                     item.mandatory
-                      ? 'bg-amber-500/15 border-amber-500/40 text-amber-600'
-                      : 'bg-emerald-500/15 border-emerald-500/40 text-emerald-600'
+                      ? isDark
+                        ? 'bg-amber-500/15 border-amber-500/40 text-amber-400'
+                        : 'bg-amber-50 border-amber-200 text-amber-800'
+                      : isDark
+                      ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400'
+                      : 'bg-emerald-50 border-emerald-200 text-emerald-700'
                   }`}
                 >
                   {item.mandatory ? 'Mandatory Upgrade' : 'Optional Upgrade'}
                 </span>
               </div>
-              <p className={`text-xs sm:text-sm font-medium max-w-2xl ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-                Published on <span className="font-mono font-bold text-cyan-400">{formattedCreated}</span> • ID: <span className="font-mono font-bold">{item.id}</span>
+              <p className={`text-xs sm:text-sm font-medium max-w-2xl ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                Published on <span className="font-mono font-bold text-cyan-600 dark:text-cyan-400">{formattedCreated}</span> • ID: <span className="font-mono font-bold">{item.id}</span>
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <button
+              type="button"
               onClick={handleCopyUrl}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center space-x-2 transition-all cursor-pointer ${
+              className={`px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center space-x-2 transition-all cursor-pointer ${
                 isDark
                   ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-                  : 'bg-white hover:bg-indigo-50 text-indigo-950 border border-indigo-200 shadow-xs'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 shadow-xs'
               }`}
             >
               {copiedUrl ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
@@ -208,74 +241,74 @@ export const ReleaseDetailScreen: React.FC<Props> = ({ item, onBack, theme = 'da
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Bundle Version */}
         <div
-          className={`p-5 rounded-2xl border transition-all ${
-            isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white/90 border-purple-200 shadow-xs'
+          className={`p-5 rounded-3xl border transition-all ${
+            isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-md shadow-slate-200/50'
           }`}
         >
           <div className="flex items-center justify-between mb-2">
-            <span className={`text-xs font-extrabold uppercase ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+            <span className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
               Bundle Version
             </span>
             <Activity className="h-4 w-4 text-emerald-500" />
           </div>
-          <div className="text-xl font-mono font-black text-emerald-500">v{item.version}</div>
-          <p className={`text-xs mt-1 font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+          <div className="text-xl font-mono font-black text-emerald-600 dark:text-emerald-400">v{item.version}</div>
+          <p className={`text-xs mt-1 font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
             Active OTA build version
           </p>
         </div>
 
         {/* Card 2: Size & Package */}
         <div
-          className={`p-5 rounded-2xl border transition-all ${
-            isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white/90 border-purple-200 shadow-xs'
+          className={`p-5 rounded-3xl border transition-all ${
+            isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-md shadow-slate-200/50'
           }`}
         >
           <div className="flex items-center justify-between mb-2">
-            <span className={`text-xs font-extrabold uppercase ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+            <span className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
               Bundle Package
             </span>
             <Zap className="h-4 w-4 text-cyan-500" />
           </div>
-          <div className="text-xl font-mono font-black text-cyan-500">
+          <div className="text-xl font-mono font-black text-cyan-600 dark:text-cyan-400">
             {item.sizeBytes ? `${(item.sizeBytes / 1024).toFixed(0)} KB` : 'ZIP Archive'}
           </div>
-          <p className={`text-xs mt-1 font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+          <p className={`text-xs mt-1 font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
             Compressed JS & Assets
           </p>
         </div>
 
         {/* Card 3: Security & Checksum */}
         <div
-          className={`p-5 rounded-2xl border transition-all ${
-            isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white/90 border-purple-200 shadow-xs'
+          className={`p-5 rounded-3xl border transition-all ${
+            isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-md shadow-slate-200/50'
           }`}
         >
           <div className="flex items-center justify-between mb-2">
-            <span className={`text-xs font-extrabold uppercase ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+            <span className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
               Checksum Status
             </span>
             <ShieldCheck className="h-4 w-4 text-purple-500" />
           </div>
-          <div className="text-xl font-mono font-black text-purple-500">SHA256 Verified</div>
-          <p className={`text-xs mt-1 font-medium font-mono ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+          <div className="text-xl font-mono font-black text-purple-600 dark:text-purple-400">SHA256 Verified</div>
+          <p className={`text-xs mt-1 font-medium font-mono ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
             #{item.hash.substring(0, 10)}...
           </p>
         </div>
 
         {/* Card 4: Database Storage */}
         <div
-          className={`p-5 rounded-2xl border transition-all ${
-            isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white/90 border-purple-200 shadow-xs'
+          className={`p-5 rounded-3xl border transition-all ${
+            isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-md shadow-slate-200/50'
           }`}
         >
           <div className="flex items-center justify-between mb-2">
-            <span className={`text-xs font-extrabold uppercase ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+            <span className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
               Realtime Storage
             </span>
             <Database className="h-4 w-4 text-amber-500" />
           </div>
-          <div className="text-xl font-mono font-black text-amber-500">Firebase DB</div>
-          <p className={`text-xs mt-1 font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+          <div className="text-xl font-mono font-black text-amber-600 dark:text-amber-400">Firebase DB</div>
+          <p className={`text-xs mt-1 font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
             Cloud synced release record
           </p>
         </div>
@@ -283,11 +316,11 @@ export const ReleaseDetailScreen: React.FC<Props> = ({ item, onBack, theme = 'da
 
       {/* Release Notes Card */}
       <div
-        className={`p-6 rounded-2xl border flex items-start space-x-4 ${
-          isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-purple-200 shadow-xs'
+        className={`p-6 rounded-3xl border flex items-start space-x-4 shadow-sm ${
+          isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200'
         }`}
       >
-        <div className="p-3 rounded-2xl bg-purple-500/15 border border-purple-500/30 text-purple-600 shrink-0">
+        <div className="p-3 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-600 dark:text-cyan-400 shrink-0">
           <FileText className="h-6 w-6" />
         </div>
         <div>
@@ -295,7 +328,7 @@ export const ReleaseDetailScreen: React.FC<Props> = ({ item, onBack, theme = 'da
             Commit Notes & Release Log
           </h3>
           <p className={`text-xs sm:text-sm font-medium leading-relaxed font-mono ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-            {item.releaseNotes}
+            {item.releaseNotes || 'No release notes provided.'}
           </p>
         </div>
       </div>
@@ -305,20 +338,20 @@ export const ReleaseDetailScreen: React.FC<Props> = ({ item, onBack, theme = 'da
 
       {/* Realtime Interactive Release Journey Timeline */}
       <div
-        className={`rounded-3xl border p-6 sm:p-8 transition-all ${
-          isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-white/90 border-purple-200 shadow-lg'
+        className={`rounded-3xl border p-6 sm:p-8 transition-all shadow-xl ${
+          isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-slate-200/60'
         }`}
       >
-        <div className="flex items-center space-x-3 mb-8">
-          <div className="p-3 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-600">
+        <div className="flex items-center space-x-3.5 mb-8">
+          <div className="p-3 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 text-white shadow-md shadow-cyan-500/25">
             <Clock className="h-6 w-6" />
           </div>
           <div>
             <h2 className="text-lg font-black tracking-tight">
               Realtime Release Journey & Audit Timeline
             </h2>
-            <p className={`text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-              Live chronological timeline generated directly from server metadata
+            <p className={`text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+              Live chronological timeline generated directly from server metadata.
             </p>
           </div>
         </div>
@@ -339,19 +372,19 @@ export const ReleaseDetailScreen: React.FC<Props> = ({ item, onBack, theme = 'da
                   className={`p-5 sm:p-6 rounded-2xl border transition-all ${
                     isDark
                       ? 'bg-slate-950/70 border-slate-800 hover:border-slate-700 shadow-lg'
-                      : 'bg-gradient-to-br from-slate-50 via-white to-indigo-50/60 border-indigo-200/90 hover:border-indigo-300 shadow-md'
+                      : 'bg-slate-50/90 border-slate-200/90 hover:border-slate-300 shadow-sm'
                   }`}
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
                     <div className="flex items-center space-x-3">
-                      <span className="w-8 h-8 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 font-black text-xs flex items-center justify-center shrink-0 shadow-xs">
-                        <StepIcon className="h-4 w-4 text-cyan-400" />
+                      <span className="w-8 h-8 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-600 dark:text-cyan-400 font-black text-xs flex items-center justify-center shrink-0 shadow-xs">
+                        <StepIcon className="h-4 w-4" />
                       </span>
                       <div>
                         <h3 className="text-base font-extrabold tracking-tight flex items-center space-x-2">
                           <span>{step.title}</span>
                         </h3>
-                        <span className={`text-xs font-bold ${isDark ? 'text-cyan-400' : 'text-purple-900'}`}>
+                        <span className={`text-xs font-bold ${isDark ? 'text-cyan-400' : 'text-cyan-800'}`}>
                           {step.subtitle}
                         </span>
                       </div>
@@ -365,16 +398,16 @@ export const ReleaseDetailScreen: React.FC<Props> = ({ item, onBack, theme = 'da
                     </span>
                   </div>
 
-                  <p className={`text-xs sm:text-sm font-medium leading-relaxed mb-4 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                  <p className={`text-xs sm:text-sm font-medium leading-relaxed mb-4 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
                     {step.description}
                   </p>
 
                   <div className="pt-2.5 border-t border-slate-200 dark:border-slate-800/80 flex items-center justify-between text-[11px] font-mono text-slate-400">
                     <span className="flex items-center space-x-1">
-                      <Clock className="h-3 w-3 text-cyan-400" />
+                      <Clock className="h-3 w-3 text-cyan-500" />
                       <span>Timestamp:</span>
                     </span>
-                    <span className="font-extrabold text-cyan-400">{step.time}</span>
+                    <span className="font-extrabold text-cyan-600 dark:text-cyan-400">{step.time}</span>
                   </div>
                 </div>
               </div>
@@ -385,19 +418,20 @@ export const ReleaseDetailScreen: React.FC<Props> = ({ item, onBack, theme = 'da
 
       {/* Bottom Technical Hash Info Expandable */}
       <div
-        className={`p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
-          isDark ? 'bg-slate-900/40 border-slate-800 text-slate-400' : 'bg-white border-purple-200 text-slate-600'
+        className={`p-5 rounded-3xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+          isDark ? 'bg-slate-900/60 border-slate-800 text-slate-400' : 'bg-white border-slate-200 text-slate-600 shadow-sm'
         }`}
       >
         <div className="flex items-center space-x-2 text-xs font-mono">
-          <HelpCircle className="h-4 w-4 text-purple-500 shrink-0" />
+          <HelpCircle className="h-4 w-4 text-cyan-500 shrink-0" />
           <span>SHA256 File Signature (For Technical Auditing):</span>
-          <span className="font-extrabold text-slate-900 dark:text-slate-200">{item.hash}</span>
+          <span className="font-extrabold text-slate-900 dark:text-slate-200 select-all">{item.hash}</span>
         </div>
 
         <button
+          type="button"
           onClick={handleCopyHash}
-          className="text-xs font-bold text-purple-600 hover:text-purple-700 flex items-center space-x-1 cursor-pointer shrink-0"
+          className="text-xs font-bold text-cyan-600 dark:text-cyan-400 hover:underline flex items-center space-x-1 cursor-pointer shrink-0"
         >
           {copiedHash ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
           <span>{copiedHash ? 'Hash Copied!' : 'Copy Full Technical Hash'}</span>
@@ -441,7 +475,7 @@ const RealtimeTelemetryCard: React.FC<{ isDark: boolean }> = ({ isDark }) => {
           <div>
             <h2 className="text-lg font-black tracking-tight text-white flex items-center space-x-2">
               <span>Realtime Mobile Phone Pings</span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-400 font-mono font-bold">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-400 font-mono font-bold">
                 LIVE CLOUD STREAM
               </span>
             </h2>
@@ -453,7 +487,7 @@ const RealtimeTelemetryCard: React.FC<{ isDark: boolean }> = ({ isDark }) => {
       </div>
 
       {telemetryLogs.length === 0 ? (
-        <div className="p-6 text-center text-xs text-slate-400 font-mono bg-slate-900/60 rounded-xl border border-slate-800">
+        <div className="p-6 text-center text-xs text-slate-400 font-mono bg-slate-900/60 rounded-2xl border border-slate-800">
           Waiting for mobile phone pings... Open your mobile app to send a live ping! 📱
         </div>
       ) : (
@@ -476,3 +510,5 @@ const RealtimeTelemetryCard: React.FC<{ isDark: boolean }> = ({ isDark }) => {
     </div>
   );
 };
+
+export default ReleaseDetailScreen;

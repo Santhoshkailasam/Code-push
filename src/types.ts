@@ -26,6 +26,8 @@ export interface ReleaseInfo {
   releaseNotes: string;
   updatedAt: string;
   sizeBytes?: number;
+  userId?: string;
+  apiKey?: string;
 }
 
 export interface ReleaseHistoryItem {
@@ -41,11 +43,39 @@ export interface ReleaseHistoryItem {
   source?: string;
   timeline?: TimelineEvent[];
   adoptionStats?: AdoptionStats;
+  userId?: string;
+  apiKey?: string;
 }
 
 export interface VersionData {
   android: ReleaseInfo;
   ios: ReleaseInfo;
   history: ReleaseHistoryItem[];
+  keys?: Record<string, { android?: ReleaseInfo; ios?: ReleaseInfo }>;
+  users?: Record<string, { android?: ReleaseInfo; ios?: ReleaseInfo }>;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  platform: 'android' | 'ios' | 'both';
+  githubRepo?: string;
+  branch?: string;
+  apiKey: string;
+  webhookUrl?: string;
+  createdAt: string;
+  updatedAt?: string;
+  userId?: string;
+}
+
+export interface BuildLogEntry {
+  id: string;
+  projectId: string;
+  timestamp: string;
+  level: 'info' | 'success' | 'warn' | 'error';
+  message: string;
+  commitHash?: string;
+  commitMessage?: string;
+  author?: string;
 }
 
