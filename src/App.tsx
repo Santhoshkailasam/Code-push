@@ -524,10 +524,24 @@ export const App: React.FC = () => {
                   />
 
                   {/* Active Releases Overview Grid */}
-                  <div className={`pt-4 border-t ${isDark ? 'border-slate-800/80' : 'border-slate-200'}`}>
-                    <h2 className={`text-lg font-black mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                      Active Production Bundles
-                    </h2>
+                  <div className={`pt-6 border-t ${isDark ? 'border-slate-800/80' : 'border-slate-200'}`}>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5">
+                      <div>
+                        <h2 className={`text-lg font-black flex items-center gap-2.5 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                          <span>Active Production Bundles</span>
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/10 border border-emerald-500/25 text-emerald-400">
+                            <span className="relative flex h-1.5 w-1.5">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                            </span>
+                            Live Edge CDN
+                          </span>
+                        </h2>
+                        <p className={`text-xs mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                          Current active JavaScript runtime bundles served globally to Android and iOS mobile clients
+                        </p>
+                      </div>
+                    </div>
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                       <ActiveReleaseCard platform="android" info={data.android} theme={theme} />
                       <ActiveReleaseCard platform="ios" info={data.ios} theme={theme} />

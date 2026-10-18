@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import type { Project } from '../types';
 import { ConfirmModal } from './ConfirmModal';
+import { FirebaseStatusIndicator } from './FirebaseStatusIndicator';
 
 interface TopHeaderProps {
   onToggleSidebar: () => void;
@@ -176,8 +177,11 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         </div>
       </div>
 
-      {/* Right Section: Time, Theme Switcher, Notifications, User Profile */}
-      <div className="flex items-center space-x-3 sm:space-x-4">
+      {/* Right Section: Firebase Status, Time, Theme Switcher, Notifications, User Profile */}
+      <div className="flex items-center space-x-2.5 sm:space-x-3.5">
+        {/* Firebase Connected Status */}
+        <FirebaseStatusIndicator theme={theme} />
+
         {/* Live Clock Pill with Status Pulse */}
         <div
           className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-mono transition-all ${
