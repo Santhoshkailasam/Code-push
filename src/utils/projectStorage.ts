@@ -1,14 +1,15 @@
 import type { Project } from '../types';
 import { db } from '../../db/firebaseConfig';
-import { doc, setDoc, collection, getDocs, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 
+const PROJECTS_RTDB_URL = 'https://tracker-42b47-default-rtdb.asia-southeast1.firebasedatabase.app/codepush_user_projects';
 const PROJECTS_COLLECTION = 'codepush_user_projects';
 const ACTIVE_PROJECT_KEY = 'codepush_active_project_id';
 
 export function createDefaultProject(userId?: string): Project {
   const shortUid = userId ? userId.slice(0, 6) : 'guest';
   return {
-    id: `proj_${shortUid}_${Date.now().toString(36)}`,
+    id: `app_${shortUid}_${Date.now().toString(36)}`,
     name: 'My Mobile App',
     platform: 'both',
     githubRepo: '',
@@ -22,7 +23,7 @@ export function createDefaultProject(userId?: string): Project {
 
 export async function getProjects(userId?: string): Promise<Project[]> {
   const localKey = `codepush_projects_${userId || 'guest'}`;
-  
+
   // Clean legacy active project ID if pointing to old skillswap default
   try {
     if (localStorage.getItem(ACTIVE_PROJECT_KEY) === 'proj_skillswap_default') {
@@ -30,81 +31,107 @@ export async function getProjects(userId?: string): Promise<Project[]> {
     }
   } catch {}
 
+  // 1. Fetch from Firebase Realtime Database (shared across local & production)
+  try {
+    const res = await fetch(`${PROJECTS_RTDB_URL}.json`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && typeof data === 'object') {
+        const rawList: Project[] = Object.values(data);
+        const filtered = rawList.filter((p: Project) => {
+          if (!p || !p.id) return false;
+          // Filter by userId if provided, or include if matching
+          if (userId && p.userId && p.userId !== userId) return false;
+          return p.id.startsWith('app_');
+        });
+
+        // Check if there are local projects in localStorage not yet synced to RTDB
+        try {
+          const cached = localStorage.getItem(localKey);
+          if (cached) {
+            const localProjects: Project[] = JSON.parse(cached);
+            if (Array.isArray(localProjects)) {
+              for (const lp of localProjects) {
+                if (lp && lp.id?.startsWith('app_') && !filtered.some((p) => p.id === lp.id)) {
+                  filtered.push(lp);
+                  // Sync missing local project up to RTDB
+                  fetch(`${PROJECTS_RTDB_URL}/${lp.id}.json`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(lp),
+                  }).catch(() => {});
+                }
+              }
+            }
+          }
+        } catch {}
+
+        if (filtered.length > 0) {
+          try {
+            localStorage.setItem(localKey, JSON.stringify(filtered));
+          } catch {}
+          return filtered;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Firebase RTDB getProjects error, falling back:', err);
+  }
+
+  // 2. Fallback to localStorage
   try {
     const cached = localStorage.getItem(localKey);
     if (cached) {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed)) {
-        // Strip all legacy mock projects (proj_ prefix = old auto-generated defaults)
         const cleaned = parsed.filter(
-          (p: Project) => p.id.startsWith('app_') // only keep user-created apps
+          (p: Project) => p && p.id && p.id.startsWith('app_')
         );
-        localStorage.setItem(localKey, JSON.stringify(cleaned));
         if (cleaned.length > 0) return cleaned;
       }
     }
   } catch {}
 
-  // Fetch from Firestore
-  if (userId) {
-    try {
-      const userProjectsRef = collection(db, PROJECTS_COLLECTION);
-      const snap = await getDocs(userProjectsRef);
-      const list: Project[] = [];
-      const toDelete: string[] = [];
-      snap.forEach((docSnap) => {
-        const item = docSnap.data() as Project;
-        if (item.userId === userId) {
-          if (item.id.startsWith('app_')) {
-            list.push(item);
-          } else {
-            // Queue stale mock docs for cleanup
-            toDelete.push(docSnap.id);
-          }
-        }
-      });
-      // Silently delete stale mock docs from Firestore
-      toDelete.forEach((id) => {
-        deleteDoc(doc(db, PROJECTS_COLLECTION, id)).catch(() => {});
-      });
-      if (list.length > 0) {
-        localStorage.setItem(localKey, JSON.stringify(list));
-        return list;
-      }
-    } catch (err) {
-      console.warn('Firestore fetch projects warning:', err);
-    }
-  }
-
-  // No projects found anywhere — user needs to create their first app
   return [];
 }
 
 export async function saveProject(project: Project, userId?: string): Promise<Project[]> {
-  const projects = await getProjects(userId);
-  const existingIdx = projects.findIndex((p) => p.id === project.id);
   const updatedProject = { ...project, userId: userId || project.userId };
+  const localKey = `codepush_projects_${userId || 'guest'}`;
 
-  let updatedList: Project[];
-  if (existingIdx >= 0) {
-    updatedList = [...projects];
-    updatedList[existingIdx] = updatedProject;
-  } else {
-    updatedList = [updatedProject, ...projects];
+  // 1. Update localStorage immediately
+  let updatedList: Project[] = [];
+  try {
+    const cached = localStorage.getItem(localKey);
+    const existing: Project[] = cached ? JSON.parse(cached) : [];
+    const idx = existing.findIndex((p) => p.id === project.id);
+    if (idx >= 0) {
+      updatedList = [...existing];
+      updatedList[idx] = updatedProject;
+    } else {
+      updatedList = [updatedProject, ...existing];
+    }
+    localStorage.setItem(localKey, JSON.stringify(updatedList));
+  } catch {
+    updatedList = [updatedProject];
   }
 
-  const localKey = `codepush_projects_${userId || 'guest'}`;
+  // 2. Save to Firebase Realtime Database (primary shared cloud database)
   try {
-    localStorage.setItem(localKey, JSON.stringify(updatedList));
-  } catch {}
+    await fetch(`${PROJECTS_RTDB_URL}/${project.id}.json`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedProject),
+    });
+  } catch (err) {
+    console.warn('Firebase RTDB save project error:', err);
+  }
 
-  // Save to Firestore
+  // 3. Fallback/Dual-write to Firestore (if permitted)
   try {
     const docRef = doc(db, PROJECTS_COLLECTION, project.id);
     await setDoc(docRef, updatedProject, { merge: true });
-  } catch (err) {
-    console.warn('Firestore save project warning:', err);
-  }
+  } catch {}
 
   return updatedList;
 }
@@ -112,7 +139,7 @@ export async function saveProject(project: Project, userId?: string): Promise<Pr
 export async function deleteProject(projectId: string, userId?: string): Promise<Project[]> {
   const localKey = `codepush_projects_${userId || 'guest'}`;
 
-  // Remove from localStorage
+  // 1. Remove from localStorage
   try {
     const cached = localStorage.getItem(localKey);
     if (cached) {
@@ -122,21 +149,27 @@ export async function deleteProject(projectId: string, userId?: string): Promise
     }
   } catch {}
 
-  // Remove from Firestore
+  // 2. Remove from Firebase Realtime Database
   try {
-    await deleteDoc(doc(db, PROJECTS_COLLECTION, projectId));
+    await fetch(`${PROJECTS_RTDB_URL}/${projectId}.json`, {
+      method: 'DELETE',
+    });
   } catch (err) {
-    console.warn('Firestore delete project warning:', err);
+    console.warn('Firebase RTDB delete project error:', err);
   }
 
-  // Clear active project ID if it was this one
+  // 3. Remove from Firestore
+  try {
+    await deleteDoc(doc(db, PROJECTS_COLLECTION, projectId));
+  } catch {}
+
+  // 4. Clear active project ID if it was this one
   try {
     if (localStorage.getItem(ACTIVE_PROJECT_KEY) === projectId) {
       localStorage.removeItem(ACTIVE_PROJECT_KEY);
     }
   } catch {}
 
-  // Return updated list
   return getProjects(userId);
 }
 
