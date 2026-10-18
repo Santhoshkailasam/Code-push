@@ -153,6 +153,29 @@ export const CodePushService = {
   },
 
   /**
+   * 📡 Listens for live alerts sent from CodePush dashboard in REAL TIME.
+   * Pops up immediately on the phone the moment you click Send!
+   */
+  startLiveAlertListener(): () => void {
+    let lastAlertId: string | null = null;
+    const checkAlert = async () => {
+      try {
+        const res = await fetch('https://tracker-42b47-default-rtdb.asia-southeast1.firebasedatabase.app/codepush_releases/alerts/latest.json');
+        if (!res.ok) return;
+        const alert = await res.json();
+        if (alert && alert.active && alert.id && alert.id !== lastAlertId) {
+          lastAlertId = alert.id;
+          Alert.alert(alert.title || 'CodePush Alert Testing', alert.message, [{ text: 'OK' }]);
+        }
+      } catch (err) {}
+    };
+    checkAlert();
+    const interval = setInterval(checkAlert, 2500); // 2.5s live polling
+    return () => clearInterval(interval);
+  },
+
+
+  /**
    * Downloads zip package, unzips bundle, updates storage & restarts JS runtime
    */
   async downloadAndApplyUpdate(downloadUrl: string, newVersion: string): Promise<void> {

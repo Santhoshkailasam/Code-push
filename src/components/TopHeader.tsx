@@ -260,7 +260,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                 />
               ) : (
                 <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-cyan-500 via-blue-600 to-indigo-600 flex items-center justify-center text-white font-black text-sm shadow-sm">
-                  {user?.displayName ? user.displayName.charAt(0).toUpperCase() : <UserIcon className="h-4 w-4 text-white" />}
+                  {(user?.displayName || user?.email)?.charAt(0).toUpperCase() || <UserIcon className="h-4 w-4 text-white" />}
                 </div>
               )}
               <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900 shadow-xs" />
@@ -268,7 +268,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
 
             <div className="hidden md:block text-left pr-1">
               <div className={`text-xs font-black leading-tight flex items-center space-x-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                <span>{user?.displayName || 'Developer Account'}</span>
+                <span>{user?.displayName || user?.email?.split('@')[0] || 'Developer Account'}</span>
               </div>
               <div className={`text-[10px] font-medium leading-tight truncate max-w-[140px] font-mono ${isDark ? 'text-cyan-400' : 'text-slate-500'}`}>
                 {user?.email || 'developer@codepush.io'}
@@ -305,14 +305,14 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                     />
                   ) : (
                     <div className="h-11 w-11 rounded-2xl bg-gradient-to-tr from-cyan-500 via-blue-600 to-indigo-600 flex items-center justify-center text-white font-black text-base shadow-md shadow-cyan-500/20 shrink-0">
-                      {user?.displayName ? user.displayName.charAt(0).toUpperCase() : <UserIcon className="h-5 w-5 text-white" />}
+                      {(user?.displayName || user?.email)?.charAt(0).toUpperCase() || <UserIcon className="h-5 w-5 text-white" />}
                     </div>
                   )}
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center space-x-1.5">
                       <span className={`text-sm font-black truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                        {user?.displayName || 'Developer Account'}
+                        {user?.displayName || user?.email?.split('@')[0] || 'Developer Account'}
                       </span>
                       <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-mono font-extrabold uppercase border shrink-0 ${
                         isDark

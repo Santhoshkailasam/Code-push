@@ -133,6 +133,38 @@ export const CodePushService = {
     }
   },
 
+  /**
+   * 📡 Listens for live alerts sent from CodePush dashboard in REAL TIME.
+   * Pops up instantly when the developer clicks Send on the dashboard!
+   */
+  startLiveAlertListener(): () => void {
+    let lastSeenAlertId: string | null = null;
+
+    const checkLiveAlert = async () => {
+      try {
+        const res = await fetch(
+          'https://tracker-42b47-default-rtdb.asia-southeast1.firebasedatabase.app/codepush_releases/alerts/latest.json'
+        );
+        if (!res.ok) return;
+        const alert = await res.json();
+
+        if (alert && alert.active && alert.id && alert.id !== lastSeenAlertId) {
+          lastSeenAlertId = alert.id;
+          Alert.alert(
+            alert.title || 'CodePush Alert Testing',
+            alert.message,
+            [{ text: 'OK' }]
+          );
+        }
+      } catch (err) {}
+    };
+
+    checkLiveAlert();
+    const interval = setInterval(checkLiveAlert, 2500); // Polls every 2.5 seconds
+    return () => clearInterval(interval);
+  },
+
+
 
   /**
    * Downloads the release package, extracts the bundle, and restarts the JS engine.

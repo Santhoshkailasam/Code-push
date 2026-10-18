@@ -15,11 +15,13 @@ import {
   Trash2,
   ShieldCheck,
   Terminal,
+  Edit3,
 } from 'lucide-react';
 import type { UserSession } from '../../App';
 import type { Project } from '../../types';
-import { db } from '../../../db/firebaseConfig';
+import { db, auth } from '../../../db/firebaseConfig';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { updateProfile } from 'firebase/auth';
 import { ConfirmModal } from '../../components/ConfirmModal';
 
 export interface ProfileScreenProps {
@@ -65,6 +67,33 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [isSignOutConfirmOpen, setIsSignOutConfirmOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [activeSnippetTab, setActiveSnippetTab] = useState<'env' | 'github' | 'curl' | 'rn'>('env');
+
+  const [userName, setUserName] = useState<string>(() => {
+    try {
+      const cached = localStorage.getItem(`codepush_user_name_${user.uid}`);
+      if (cached) return cached;
+    } catch {}
+    return user.displayName || user.email?.split('@')[0] || 'Developer';
+  });
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState(userName);
+
+  const handleSaveName = async () => {
+    const trimmed = nameInput.trim();
+    if (!trimmed) return;
+    setUserName(trimmed);
+    setIsEditingName(false);
+    try {
+      localStorage.setItem(`codepush_user_name_${user.uid}`, trimmed);
+      if (auth.currentUser) {
+        await updateProfile(auth.currentUser, { displayName: trimmed });
+      }
+      await setDoc(doc(db, 'codepush_user_keys', user.uid), { displayName: trimmed }, { merge: true });
+      showToast(`Username updated to "${trimmed}"!`);
+    } catch {
+      showToast('Username saved locally!');
+    }
+  };
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return 'Recently';
@@ -211,7 +240,7 @@ export default function App() {
                   />
                 ) : (
                   <div className="h-24 w-24 rounded-3xl bg-gradient-to-tr from-cyan-500 via-blue-600 to-indigo-600 flex items-center justify-center text-white font-extrabold text-3xl shadow-xl shadow-cyan-500/25 border-4 border-white dark:border-slate-800">
-                    {user.displayName ? user.displayName.charAt(0).toUpperCase() : <User className="h-10 w-10 text-white" />}
+                    {userName ? userName.charAt(0).toUpperCase() : <User className="h-10 w-10 text-white" />}
                   </div>
                 )}
                 <span className="absolute -bottom-1 -right-1 h-6 w-6 rounded-full bg-emerald-500 ring-4 ring-white dark:ring-slate-900 flex items-center justify-center shadow-md">
@@ -220,8 +249,43 @@ export default function App() {
               </div>
 
               <div>
-                <h2 className="text-xl font-extrabold tracking-tight">{user.displayName || 'Developer Account'}</h2>
-                <p className={`text-xs mt-0.5 font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                {isEditingName ? (
+                  <div className="flex items-center space-x-2 mt-1">
+                    <input
+                      type="text"
+                      value={nameInput}
+                      onChange={(e) => setNameInput(e.target.value)}
+                      className={`px-3 py-1.5 text-sm rounded-xl border font-bold focus:outline-none focus:ring-2 focus:ring-cyan-400 ${
+                        isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+                      }`}
+                      autoFocus
+                    />
+                    <button
+                      onClick={handleSaveName}
+                      className="px-3 py-1.5 text-xs bg-cyan-500 hover:bg-cyan-600 text-white font-bold rounded-xl shadow-sm transition-all"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => { setIsEditingName(false); setNameInput(userName); }}
+                      className="px-2.5 py-1.5 text-xs text-slate-400 hover:text-slate-200"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center space-x-2">
+                    <h2 className="text-xl font-extrabold tracking-tight">{userName}</h2>
+                    <button
+                      onClick={() => setIsEditingName(true)}
+                      className="p-1 rounded-lg hover:bg-cyan-500/10 text-slate-400 hover:text-cyan-400 transition-colors"
+                      title="Edit Display Name"
+                    >
+                      <Edit3 className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
+                <p className={`text-xs mt-1 font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                   {user.email || 'developer@codepush.io'}
                 </p>
               </div>
