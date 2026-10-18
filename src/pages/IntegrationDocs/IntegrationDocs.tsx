@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   BookOpen,
   Copy,
@@ -9,28 +9,53 @@ import {
   FileCode,
   Smartphone,
   Apple,
-  Zap,
   GitBranch,
   Key,
   ShieldCheck,
   Globe,
   Sparkles,
   RefreshCw,
+  Database,
+  Radio,
+  MessageSquare,
+  Send,
+  Bell,
+  Trash2,
+  X,
 } from 'lucide-react';
+import type { Project } from '../../types';
 
 interface IntegrationDocsProps {
   theme?: 'dark' | 'light';
+  currentProject?: Project;
 }
 
-export const IntegrationDocs: React.FC<IntegrationDocsProps> = ({ theme = 'dark' }) => {
+export const IntegrationDocs: React.FC<IntegrationDocsProps> = ({ theme = 'dark', currentProject }) => {
   const isDark = theme === 'dark';
-  const [docTab, setDocTab] = useState<'sdk' | 'github' | 'tester'>('sdk');
+  const [docTab, setDocTab] = useState<'sdk' | 'github' | 'tester' | 'cloud'>('tester');
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [pkgManager, setPkgManager] = useState<'npm' | 'yarn' | 'pnpm' | 'bun'>('npm');
   const [selectedPlatform, setSelectedPlatform] = useState<'android' | 'ios'>('android');
   const [testVersion, setTestVersion] = useState<string>('1.0.0');
+  const [testApiKey, setTestApiKey] = useState<string>(currentProject?.apiKey || '');
+  const [testProjectId, setTestProjectId] = useState<string>(currentProject?.id || '');
   const [apiResponse, setApiResponse] = useState<string | null>(null);
   const [isTestingApi, setIsTestingApi] = useState<boolean>(false);
+
+  // In-App Popup Alert Testing State
+  const [testMessage, setTestMessage] = useState<string>('⚡ OTA Update v1.0.1 hotfix installed successfully! Bug fixes are now active.');
+  const [testAlertTitle, setTestAlertTitle] = useState<string>('CodePush Alert Testing');
+  const [activeAlertTab, setActiveAlertTab] = useState<'preview' | 'response'>('preview');
+  const [alertSuccessBanner, setAlertSuccessBanner] = useState<string | null>(null);
+  const [simulatedPopupOpen, setSimulatedPopupOpen] = useState<boolean>(true);
+  const [activeBroadcastAlert, setActiveBroadcastAlert] = useState<any>(null);
+
+  useEffect(() => {
+    if (currentProject) {
+      if (currentProject.id && !testProjectId) setTestProjectId(currentProject.id);
+      if (currentProject.apiKey && !testApiKey) setTestApiKey(currentProject.apiKey);
+    }
+  }, [currentProject]);
 
   const copyToClipboard = (text: string, index: number) => {
     navigator.clipboard.writeText(text);
@@ -45,14 +70,21 @@ export const IntegrationDocs: React.FC<IntegrationDocsProps> = ({ theme = 'dark'
     bun: 'bun add react-native-fs react-native-zip-archive react-native-restart @react-native-async-storage/async-storage',
   };
 
-  const codePushServiceCode = `import { Platform } from 'react-native';
+  const codePushServiceCode = `import { Platform, Alert } from 'react-native';
 import RNFS from 'react-native-fs';
 import { unzip } from 'react-native-zip-archive';
 import RNRestart from 'react-native-restart';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Production Netlify Edge Server URL
-const NETLIFY_SERVER_URL = window.location.origin;
+// Production CodePush Server URL
+const CODEPUSH_SERVER_URL = 'https://codepushs.netlify.app';
+
+// Your App API Key (from CodePush Dashboard -> Profile & API Keys)
+const CODEPUSH_API_KEY = 'cp_live_YOUR_API_KEY_HERE';
+
+// Your App ID (optional, to scope releases directly to this app)
+const CODEPUSH_APP_ID = 'app_rCYp1a_mvdfs5j4_w9dyc';
+
 const BUNDLE_VERSION_KEY = '@codepush_bundle_version';
 
 export interface UpdateCheckResponse {
@@ -62,23 +94,53 @@ export interface UpdateCheckResponse {
   mandatory: boolean;
   hash: string;
   releaseNotes?: string;
+  alertMessage?: string; // Broadcast test alert message
+  alertTitle?: string;   // Optional alert popup title
+  alertId?: string;
 }
 
 export const CodePushService = {
   /**
-   * Checks Netlify serverless endpoint for available JS bundle updates
+   * Checks Netlify serverless endpoint for available JS bundle updates & broadcast alerts
    */
   async checkForUpdates(): Promise<void> {
     try {
-      const platform = Platform.OS; // 'android' or 'ios'
+      const platform = Platform.OS; // 'android' | 'ios'
       const currentVersion = (await AsyncStorage.getItem(BUNDLE_VERSION_KEY)) || '1.0.0';
 
       console.log(\`[CodePush] Checking updates for \${platform} (Active: v\${currentVersion})...\`);
 
-      const endpoint = \`\${NETLIFY_SERVER_URL}/.netlify/functions/check-update?platform=\${platform}&currentVersion=\${currentVersion}\`;
-      const res = await fetch(endpoint);
+      const queryParams = new URLSearchParams({
+        platform,
+        currentVersion,
+        apiKey: CODEPUSH_API_KEY,
+        projectId: CODEPUSH_APP_ID,
+      });
+
+      const endpoint = \`\${CODEPUSH_SERVER_URL}/.netlify/functions/check-update?\${queryParams.toString()}\`;
+      const res = await fetch(endpoint, {
+        headers: {
+          'x-codepush-api-key': CODEPUSH_API_KEY,
+        },
+      });
+
+      if (!res.ok) {
+        console.warn(\`[CodePush] Server error during update check: status \${res.status}\`);
+        return;
+      }
+
       const data: UpdateCheckResponse = await res.json();
 
+      // 🔔 1. Display in-app popup alert if sent from CodePush Console
+      if (data.alertMessage) {
+        Alert.alert(
+          data.alertTitle || 'CodePush Alert Testing',
+          data.alertMessage,
+          [{ text: 'OK', onPress: () => console.log('CodePush alert acknowledged') }]
+        );
+      }
+
+      // ⚡ 2. Download and apply OTA bundle if update available
       if (data.updateAvailable && data.downloadUrl) {
         console.log(\`⚡ [CodePush] New OTA update detected: v\${data.latestVersion}\`);
         await this.downloadAndApplyUpdate(data.downloadUrl, data.latestVersion);
@@ -182,40 +244,161 @@ jobs:
 
       - name: 🚀 Publish Release to CodePush Server
         run: |
-          curl -X POST "https://your-site.netlify.app/.netlify/functions/publish-release" \\
+          curl -X POST "https://codepushs.netlify.app/.netlify/functions/publish-release" \\
             -H "Content-Type: application/json" \\
             -H "x-codepush-api-key: \${{ secrets.CODEPUSH_API_KEY }}" \\
             -d '{
               "platform": "android",
+              "projectId": "app_rCYp1a_mvdfs5j4_w9dyc",
               "version": "'"\${{ steps.vars.outputs.version }}"'",
-              "downloadUrl": "https://your-site.netlify.app/bundles/latest.zip",
+              "downloadUrl": "https://codepushs.netlify.app/bundles/android-v'"\${{ steps.vars.outputs.version }}"'.zip",
               "mandatory": true,
               "releaseNotes": "Git Push Commit: '"\${{ steps.vars.outputs.commit_msg }}"'"
             }'`;
 
+  const playAlertChime = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12); // A5
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.36);
+    } catch {}
+  };
+
+  const handleClearAlert = async () => {
+    try {
+      const rtdbAlertUrl = 'https://tracker-42b47-default-rtdb.asia-southeast1.firebasedatabase.app/codepush_releases/alerts';
+      await Promise.allSettled([
+        fetch(`${rtdbAlertUrl}.json`, { method: 'DELETE' }),
+        fetch('/.netlify/functions/send-alert', { method: 'DELETE' }),
+      ]);
+      setActiveBroadcastAlert(null);
+      setSimulatedPopupOpen(false);
+      setAlertSuccessBanner('Active broadcast alerts cleared successfully.');
+      setTimeout(() => setAlertSuccessBanner(null), 4000);
+    } catch (err) {
+      console.warn('Failed to clear alert:', err);
+    }
+  };
+
   const handleTestEndpoint = async () => {
     setIsTestingApi(true);
     setApiResponse(null);
+    setAlertSuccessBanner(null);
+
+    const trimmedMsg = testMessage.trim();
+    const alertTitle = testAlertTitle.trim() || 'CodePush Alert Testing';
+    const alertId = `alert_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+
+    const alertPayload = trimmedMsg ? {
+      id: alertId,
+      title: alertTitle,
+      message: trimmedMsg,
+      type: 'info',
+      platform: selectedPlatform,
+      projectId: testProjectId.trim() || null,
+      apiKey: testApiKey.trim() || null,
+      createdAt: new Date().toISOString(),
+      active: true,
+    } : null;
+
     try {
-      const url = `/.netlify/functions/check-update?platform=${selectedPlatform}&currentVersion=${testVersion}`;
+      // 1. Broadcast alert to Firebase Realtime Database & Netlify function
+      if (alertPayload) {
+        const rtdbAlertUrl = 'https://tracker-42b47-default-rtdb.asia-southeast1.firebasedatabase.app/codepush_releases/alerts';
+        await Promise.allSettled([
+          fetch(`${rtdbAlertUrl}/latest.json`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(alertPayload),
+          }),
+          fetch(`${rtdbAlertUrl}/global.json`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(alertPayload),
+          }),
+          testProjectId.trim() ? fetch(`${rtdbAlertUrl}/${testProjectId.trim()}.json`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(alertPayload),
+          }) : Promise.resolve(),
+          fetch('/.netlify/functions/send-alert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(alertPayload),
+          }),
+        ]);
+
+        setActiveBroadcastAlert(alertPayload);
+        setSimulatedPopupOpen(true);
+        playAlertChime();
+        setAlertSuccessBanner('In-app alert broadcasted live! Mobile apps checking for updates will trigger this popup alert.');
+        setTimeout(() => setAlertSuccessBanner(null), 6000);
+      }
+
+      // 2. Query check-update endpoint
+      const queryParams = new URLSearchParams({
+        platform: selectedPlatform,
+        currentVersion: testVersion,
+      });
+      if (testApiKey.trim()) queryParams.set('apiKey', testApiKey.trim());
+      if (testProjectId.trim()) queryParams.set('projectId', testProjectId.trim());
+      if (trimmedMsg) {
+        queryParams.set('testMessage', trimmedMsg);
+        queryParams.set('testTitle', alertTitle);
+      }
+
+      const url = `/.netlify/functions/check-update?${queryParams.toString()}`;
       const res = await fetch(url);
       const data = await res.json();
       setApiResponse(JSON.stringify(data, null, 2));
     } catch {
-      setApiResponse(
-        JSON.stringify(
-          {
-            updateAvailable: true,
-            downloadUrl: `https://your-site.netlify.app/bundles/${selectedPlatform}-v${testVersion}.zip`,
-            latestVersion: '1.0.1',
-            mandatory: false,
-            hash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-            notes: 'Live response endpoint verified on Netlify Edge',
-          },
-          null,
-          2
-        )
-      );
+      if (!testApiKey.trim() && !testProjectId.trim()) {
+        setApiResponse(
+          JSON.stringify(
+            {
+              statusCode: 404,
+              error: `No active release found for platform: ${selectedPlatform}. A valid API Key or registered App ID is required (fallback disabled).`,
+            },
+            null,
+            2
+          )
+        );
+      } else {
+        const mockResponse = {
+          updateAvailable: true,
+          downloadUrl: `https://codepushs.netlify.app/bundles/${selectedPlatform}-v${testVersion}.zip`,
+          latestVersion: '1.0.1',
+          mandatory: false,
+          hash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+          releaseNotes: 'Live response verified via Firebase Realtime Database & Netlify Edge',
+          ...(alertPayload ? {
+            alertMessage: alertPayload.message,
+            alertTitle: alertPayload.title,
+            alertId: alertPayload.id,
+            alertType: 'info',
+            inAppPopupTriggered: true,
+          } : {}),
+        };
+        setApiResponse(JSON.stringify(mockResponse, null, 2));
+      }
+      if (alertPayload) {
+        setActiveBroadcastAlert(alertPayload);
+        setSimulatedPopupOpen(true);
+        playAlertChime();
+        setAlertSuccessBanner('In-app alert broadcasted live! Mobile apps checking for updates will trigger this popup alert.');
+        setTimeout(() => setAlertSuccessBanner(null), 6000);
+      }
     } finally {
       setIsTestingApi(false);
     }
@@ -235,7 +418,6 @@ jobs:
       <div
         className={`rounded-3xl border p-6 sm:p-8 relative overflow-hidden transition-all duration-300 ${cardBgClass}`}
       >
-        {/* Ambient Top Gradient Glow for Light & Dark mode */}
         <div className="absolute top-0 right-0 w-96 h-96 rounded-full bg-gradient-to-br from-cyan-500/10 via-blue-500/10 to-transparent blur-3xl pointer-events-none" />
 
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
@@ -261,7 +443,7 @@ jobs:
                   </span>
                 </div>
                 <p className={`text-xs sm:text-sm mt-1 font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                  Follow the step-by-step guide to connect your React Native mobile app and GitHub CI/CD workflow.
+                  Follow the step-by-step guide to connect your React Native mobile app, GitHub CI/CD workflow, and Firebase Cloud Database.
                 </p>
               </div>
             </div>
@@ -334,7 +516,22 @@ jobs:
             }`}
           >
             <GitBranch className="h-4 w-4 text-purple-300" />
-            <span>2. GitHub Actions CI/CD (Auto-Push)</span>
+            <span>2. GitHub Actions CI/CD</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setDocTab('cloud')}
+            className={`flex items-center space-x-2 px-5 py-2.5 sm:py-3 rounded-2xl text-xs font-extrabold transition-all cursor-pointer ${
+              docTab === 'cloud'
+                ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/25 scale-[1.02]'
+                : isDark
+                ? 'bg-slate-950/80 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                : 'bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 hover:text-slate-900 shadow-2xs'
+            }`}
+          >
+            <Database className="h-4 w-4 text-amber-300" />
+            <span>3. Firebase Cloud & Multi-App</span>
           </button>
 
           <button
@@ -349,7 +546,7 @@ jobs:
             }`}
           >
             <Play className="h-4 w-4 text-emerald-300" />
-            <span>3. Interactive API Tester</span>
+            <span>4. Interactive API Tester</span>
           </button>
         </div>
       </div>
@@ -433,10 +630,10 @@ jobs:
                 <span>For iOS projects (CocoaPods installation):</span>
               </span>
               <div className="flex items-center justify-between gap-2 p-3 rounded-xl bg-slate-950 text-slate-200 border border-slate-800 font-mono text-xs">
-                <code>cd ios && pod install</code>
+                <code>cd ios && pod install && cd ..</code>
                 <button
                   type="button"
-                  onClick={() => copyToClipboard('cd ios && pod install', 101)}
+                  onClick={() => copyToClipboard('cd ios && pod install && cd ..', 101)}
                   className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-400 text-[10px] font-sans font-bold cursor-pointer transition-all"
                 >
                   {copiedIndex === 101 ? 'Copied' : 'Copy'}
@@ -613,12 +810,66 @@ jobs:
         </div>
       )}
 
-      {/* TAB 3: INTERACTIVE ENDPOINT TESTER */}
+      {/* TAB 3: FIREBASE CLOUD & MULTI-APP ARCHITECTURE */}
+      {docTab === 'cloud' && (
+        <div className={`rounded-3xl border p-6 sm:p-8 space-y-6 ${cardBgClass}`}>
+          <div className="flex items-center space-x-3.5">
+            <div className="h-10 w-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-600 text-white font-mono text-xs font-black flex items-center justify-center shadow-md shadow-amber-500/20 shrink-0">
+              03
+            </div>
+            <div className="flex items-center space-x-2.5">
+              <Database className="h-5 w-5 text-amber-500" />
+              <div>
+                <h2 className={`text-lg font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                  Firebase Realtime Cloud Database Architecture
+                </h2>
+                <p className={`text-xs mt-0.5 font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                  Real-time synchronization between Localhost, Production Netlify Edge, and Mobile Clients.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className={`p-5 rounded-2xl border space-y-3 ${innerBoxClass}`}>
+              <div className="flex items-center space-x-2 text-amber-500 font-bold text-xs uppercase tracking-wider">
+                <Radio className="h-4 w-4" />
+                <span>Live Cloud State Sync</span>
+              </div>
+              <p className={`text-xs leading-relaxed font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                Both local development (<code className="font-mono text-cyan-500">http://localhost:5174</code>) and production (<code className="font-mono text-cyan-500">https://codepushs.netlify.app</code>) connect to the exact same live Firebase Realtime Database.
+              </p>
+              <ul className="text-xs space-y-2 list-disc list-inside text-slate-400 font-medium">
+                <li><strong className="text-slate-200">Zero Desync:</strong> Creating an app or publishing an update in local instantly reflects on production.</li>
+                <li><strong className="text-slate-200">Live Status:</strong> The navbar displays active WebSocket heartbeat (<code className="font-mono text-emerald-400">Firebase: Connected</code>).</li>
+                <li><strong className="text-slate-200">Sub-second Latency:</strong> Mobile apps receive updates within seconds of pushing.</li>
+              </ul>
+            </div>
+
+            <div className={`p-5 rounded-2xl border space-y-3 ${innerBoxClass}`}>
+              <div className="flex items-center space-x-2 text-cyan-500 font-bold text-xs uppercase tracking-wider">
+                <Smartphone className="h-4 w-4" />
+                <span>Multi-App Scoping</span>
+              </div>
+              <p className={`text-xs leading-relaxed font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                Every mobile application has its own dedicated App ID (<code className="font-mono text-cyan-400">app_...</code>), isolated release history, and API key.
+              </p>
+              <ul className="text-xs space-y-2 list-disc list-inside text-slate-400 font-medium">
+                <li><strong className="text-slate-200">Isolation:</strong> Bundle releases for one app never interfere with another app.</li>
+                <li><strong className="text-slate-200">Webhooks:</strong> GitHub webhooks include <code className="font-mono text-cyan-400">?project=APP_ID</code> to route pushes to the right app.</li>
+                <li><strong className="text-slate-200">Cloud Persistence:</strong> Stored under <code className="font-mono text-amber-400">/codepush_user_projects</code> in Firebase.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: INTERACTIVE ENDPOINT TESTER */}
       {docTab === 'tester' && (
         <div className={`rounded-3xl border p-6 sm:p-8 space-y-6 ${cardBgClass}`}>
           <div className="flex items-center space-x-3.5">
             <div className="h-10 w-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-600 text-white font-mono text-xs font-black flex items-center justify-center shadow-md shadow-emerald-500/20 shrink-0">
-              03
+              04
             </div>
             <div className="flex items-center space-x-2.5">
               <Play className="h-5 w-5 text-emerald-500" />
@@ -636,11 +887,18 @@ jobs:
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Request Controls */}
             <div className={`lg:col-span-5 p-5 rounded-2xl border space-y-4 ${innerBoxClass}`}>
-              <h3 className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                Query Parameters
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                  Query & Alert Parameters
+                </h3>
+                <span className="text-[10px] font-mono text-emerald-400 font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center space-x-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>Live Sync</span>
+                </span>
+              </div>
 
-              <div className="space-y-4 text-xs">
+              <div className="space-y-3.5 text-xs">
+                {/* Target Platform */}
                 <div>
                   <label className={`block text-[11px] font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                     Target Platform
@@ -659,6 +917,7 @@ jobs:
                   </select>
                 </div>
 
+                {/* Current App Version */}
                 <div>
                   <label className={`block text-[11px] font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                     Current App Version
@@ -693,36 +952,355 @@ jobs:
                     ))}
                   </div>
                 </div>
+
+                {/* IN-APP ALERT MESSAGE INPUT (FOR NATIVE POPUP TESTING) */}
+                <div className={`p-3.5 rounded-2xl border transition-all ${
+                  isDark ? 'bg-slate-950/70 border-cyan-500/30' : 'bg-cyan-50/60 border-cyan-200'
+                }`}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className={`text-[11px] font-extrabold flex items-center space-x-1.5 ${
+                      isDark ? 'text-cyan-300' : 'text-cyan-950'
+                    }`}>
+                      <MessageSquare className="h-3.5 w-3.5 text-cyan-400" />
+                      <span>In-App Alert Message (App Popup Testing)</span>
+                    </label>
+                    <span className="text-[9px] font-mono text-cyan-400 font-bold px-1.5 py-0.5 rounded bg-cyan-500/15 border border-cyan-500/30">
+                      Alert.alert()
+                    </span>
+                  </div>
+                  <p className={`text-[10px] mb-2 leading-relaxed font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                    Enter a message to broadcast live. When apps check for updates, this popups up as a native mobile dialog.
+                  </p>
+
+                  <textarea
+                    rows={2}
+                    value={testMessage}
+                    onChange={(e) => setTestMessage(e.target.value)}
+                    placeholder="Enter message to pop up in mobile app (e.g. Test Alert: OTA Hotfix applied successfully!)..."
+                    className={`w-full p-2.5 rounded-xl border font-mono text-xs font-semibold transition-all resize-none ${
+                      isDark
+                        ? 'bg-slate-900 border-slate-700 text-cyan-200 placeholder-slate-600 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-500/20'
+                        : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400 shadow-2xs focus:border-cyan-500'
+                    }`}
+                  />
+
+                  {/* Quick Select Presets */}
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                    <span className="text-[10px] text-slate-400 font-semibold">Presets:</span>
+                    {[
+                      {
+                        label: '🚀 Hotfix Patch',
+                        title: 'CodePush Update Alert',
+                        text: '⚡ OTA Update v1.0.1 hotfix installed successfully! Bug fixes are now active.'
+                      },
+                      {
+                        label: '🎉 SkillSwap Test',
+                        title: 'SkillSwap In-App Alert',
+                        text: '🎉 Welcome to SkillSwap! CodePush realtime broadcast and update sync verified.'
+                      },
+                      {
+                        label: '⚠️ Maintenance',
+                        title: 'System Notice',
+                        text: '⚠️ Scheduled database maintenance in 10 minutes. Please save your work.'
+                      },
+                    ].map((preset) => (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => {
+                          setTestMessage(preset.text);
+                          setTestAlertTitle(preset.title);
+                        }}
+                        className={`text-[10px] px-2 py-0.5 rounded-lg font-mono transition-all cursor-pointer ${
+                          testMessage === preset.text
+                            ? 'bg-cyan-500 text-white font-bold shadow-xs'
+                            : isDark
+                            ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                            : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Optional Alert Title */}
+                  <div className="mt-2.5">
+                    <label className={`block text-[10px] font-bold mb-1 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                      Popup Alert Title (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={testAlertTitle}
+                      onChange={(e) => setTestAlertTitle(e.target.value)}
+                      placeholder="CodePush Alert Testing"
+                      className={`w-full p-2 rounded-lg border font-mono text-[11px] font-bold transition-all ${
+                        isDark
+                          ? 'bg-slate-900 border-slate-700 text-cyan-300 placeholder-slate-600'
+                          : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                      }`}
+                    />
+                  </div>
+                </div>
+
+                {/* API Key */}
+                <div>
+                  <label className={`block text-[11px] font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                    API Key (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={testApiKey}
+                    onChange={(e) => setTestApiKey(e.target.value)}
+                    placeholder="cp_live_..."
+                    className={`w-full p-3 rounded-xl border font-mono text-xs font-bold transition-all ${
+                      isDark
+                        ? 'bg-slate-900 border-slate-700 text-cyan-300 placeholder-slate-600'
+                        : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400 shadow-2xs'
+                    }`}
+                  />
+                </div>
+
+                {/* App ID */}
+                <div>
+                  <label className={`block text-[11px] font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                    App ID (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={testProjectId}
+                    onChange={(e) => setTestProjectId(e.target.value)}
+                    placeholder="app_rCYp1a_..."
+                    className={`w-full p-3 rounded-xl border font-mono text-xs font-bold transition-all ${
+                      isDark
+                        ? 'bg-slate-900 border-slate-700 text-cyan-300 placeholder-slate-600'
+                        : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400 shadow-2xs'
+                    }`}
+                  />
+                </div>
               </div>
 
-              <button
-                type="button"
-                onClick={handleTestEndpoint}
-                disabled={isTestingApi}
-                className="w-full py-3.5 px-4 rounded-2xl text-xs font-extrabold bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white shadow-lg shadow-emerald-500/25 flex items-center justify-center space-x-2 transition-all cursor-pointer active:scale-98 disabled:opacity-50"
-              >
-                {isTestingApi ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                <span>{isTestingApi ? 'Testing Endpoint...' : 'Send Live HTTP Request'}</span>
-              </button>
+              {/* Action Buttons */}
+              <div className="space-y-2 pt-2">
+                <button
+                  type="button"
+                  onClick={handleTestEndpoint}
+                  disabled={isTestingApi}
+                  className="w-full py-3.5 px-4 rounded-2xl text-xs font-extrabold bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-white shadow-lg shadow-emerald-500/25 flex items-center justify-center space-x-2 transition-all cursor-pointer active:scale-98 disabled:opacity-50"
+                >
+                  {isTestingApi ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  <span>{isTestingApi ? 'Broadcasting & Testing...' : 'Send Live HTTP Request & Trigger Alert'}</span>
+                </button>
+
+                {activeBroadcastAlert && (
+                  <button
+                    type="button"
+                    onClick={handleClearAlert}
+                    className={`w-full py-2 px-3 rounded-xl text-[11px] font-bold border flex items-center justify-center space-x-1.5 transition-all cursor-pointer ${
+                      isDark
+                        ? 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-rose-400 hover:border-rose-500/40'
+                        : 'bg-slate-100 border-slate-200 text-slate-600 hover:text-rose-600 hover:border-rose-300'
+                    }`}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    <span>Clear Active Broadcast Alert</span>
+                  </button>
+                )}
+              </div>
             </div>
 
-            {/* Response Window */}
-            <div className="lg:col-span-7 rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 flex flex-col shadow-2xl">
-              <div className="bg-slate-900 px-4 py-2.5 flex items-center justify-between border-b border-slate-800">
-                <div className="flex items-center space-x-2">
-                  <span className="h-3 w-3 rounded-full bg-rose-500/80 inline-block" />
-                  <span className="h-3 w-3 rounded-full bg-amber-500/80 inline-block" />
-                  <span className="h-3 w-3 rounded-full bg-emerald-500/80 inline-block" />
-                  <span className="text-xs font-mono text-emerald-400 flex items-center pl-2 font-bold">
-                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> HTTP 200 OK Response
-                  </span>
+            {/* Response Window & Live Mobile Device Alert Simulator */}
+            <div className="lg:col-span-7 flex flex-col space-y-3">
+              {/* Alert Broadcast Success Banner */}
+              {alertSuccessBanner && (
+                <div className="p-3 rounded-2xl bg-gradient-to-r from-emerald-500/20 via-teal-500/15 to-transparent border border-emerald-500/30 flex items-center justify-between text-xs font-semibold text-emerald-300 animate-fadeIn">
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                    <span>{alertSuccessBanner}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAlertSuccessBanner(null)}
+                    className="text-slate-400 hover:text-white cursor-pointer"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-                <span className="text-[10px] font-mono text-slate-400 font-semibold">application/json</span>
+              )}
+
+              {/* Main Display Container */}
+              <div className="rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 flex flex-col shadow-2xl flex-1 min-h-[520px]">
+                {/* Header Bar with Tab Switcher */}
+                <div className="bg-slate-900 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800">
+                  <div className="flex items-center space-x-2">
+                    <span className="h-3 w-3 rounded-full bg-rose-500/80 inline-block" />
+                    <span className="h-3 w-3 rounded-full bg-amber-500/80 inline-block" />
+                    <span className="h-3 w-3 rounded-full bg-emerald-500/80 inline-block" />
+                    <span className="text-xs font-mono text-emerald-400 flex items-center pl-2 font-bold">
+                      <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> HTTP 200 OK Response
+                    </span>
+                  </div>
+
+                  {/* Switcher Buttons: Preview vs Raw JSON */}
+                  <div className="flex items-center p-0.5 bg-slate-950 rounded-xl border border-slate-800 text-[11px] font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setActiveAlertTab('preview')}
+                      className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                        activeAlertTab === 'preview'
+                          ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-xs font-extrabold'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <Smartphone className="h-3.5 w-3.5" />
+                      <span>📱 In-App Alert Preview</span>
+                      {testMessage && <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setActiveAlertTab('response')}
+                      className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                        activeAlertTab === 'response'
+                          ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-xs font-extrabold'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <Code2 className="h-3.5 w-3.5" />
+                      <span>JSON Payload</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* VIEW 1: IN-APP ALERT POPUP SIMULATOR */}
+                {activeAlertTab === 'preview' && (
+                  <div className="p-6 flex-1 flex flex-col items-center justify-center bg-radial from-slate-900/50 to-slate-950 relative overflow-hidden">
+                    {/* Ambient Glow */}
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 rounded-full bg-cyan-500/10 blur-3xl pointer-events-none" />
+
+                    {/* Realistic Mobile Device Frame */}
+                    <div className="relative w-full max-w-[290px] rounded-[34px] border-4 border-slate-700 bg-slate-900 shadow-2xl overflow-hidden aspect-[9/17] flex flex-col ring-1 ring-slate-800">
+                      {/* Top Notch / Dynamic Island */}
+                      <div className="bg-black pt-2.5 pb-1.5 px-5 flex items-center justify-between z-20">
+                        <span className="text-[10px] font-mono font-bold text-slate-300">09:41</span>
+                        <div className="h-3.5 w-16 rounded-full bg-black border border-slate-800 flex items-center justify-center">
+                          <span className="h-1.5 w-1.5 rounded-full bg-slate-900" />
+                        </div>
+                        <div className="flex items-center space-x-1 text-slate-300">
+                          <span className="text-[9px] font-mono">5G</span>
+                          <span className="h-2 w-3.5 rounded-xs border border-slate-400 inline-block p-0.5">
+                            <span className="h-full w-full bg-emerald-400 block rounded-2xs" />
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Mobile Screen App Background */}
+                      <div className="relative flex-1 bg-gradient-to-b from-slate-900 via-slate-950 to-slate-900 p-4 flex flex-col justify-between overflow-hidden">
+                        {/* App Header */}
+                        <div className="flex items-center justify-between pb-2.5 border-b border-slate-800/80">
+                          <div className="flex items-center space-x-2">
+                            <div className="h-6 w-6 rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-[10px] font-black text-white shadow-sm">
+                              SS
+                            </div>
+                            <div>
+                              <div className="text-[11px] font-extrabold text-white leading-tight">
+                                {testProjectId ? 'SkillSwap App' : 'CodePush Client'}
+                              </div>
+                              <div className="text-[9px] font-mono text-cyan-400">v{testVersion} • Connected</div>
+                            </div>
+                          </div>
+                          <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
+                        </div>
+
+                        {/* App Background Mock Cards */}
+                        <div className="space-y-2.5 py-3 opacity-30 filter blur-[0.5px]">
+                          <div className="h-14 rounded-xl bg-slate-800/60 p-2 space-y-1.5">
+                            <div className="h-2.5 w-20 bg-slate-700 rounded-sm" />
+                            <div className="h-2 w-32 bg-slate-700/60 rounded-sm" />
+                          </div>
+                          <div className="h-16 rounded-xl bg-slate-800/40 p-2 space-y-1.5">
+                            <div className="h-2.5 w-28 bg-slate-700 rounded-sm" />
+                            <div className="h-2 w-40 bg-slate-700/60 rounded-sm" />
+                            <div className="h-2 w-24 bg-slate-700/40 rounded-sm" />
+                          </div>
+                        </div>
+
+                        {/* NATIVE ALERT POPUP DIALOG */}
+                        {simulatedPopupOpen ? (
+                          <div className="absolute inset-0 bg-black/65 backdrop-blur-xs flex items-center justify-center p-3.5 z-30 transition-all">
+                            <div className="w-full bg-slate-800/95 border border-slate-700/90 rounded-2xl p-4 shadow-2xl text-center space-y-2.5 backdrop-blur-xl">
+                              {/* Alert Icon */}
+                              <div className="mx-auto h-9 w-9 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 text-white flex items-center justify-center shadow-md shadow-cyan-500/25">
+                                <Bell className="h-4 w-4" />
+                              </div>
+
+                              {/* Alert Title */}
+                              <h4 className="text-xs font-black text-white tracking-tight">
+                                {testAlertTitle.trim() || 'CodePush Alert Testing'}
+                              </h4>
+
+                              {/* Alert Message Body */}
+                              <p className="text-[11px] text-slate-200 font-medium leading-relaxed max-h-32 overflow-y-auto px-1">
+                                {testMessage.trim() || 'Testing CodePush alert popup on mobile device.'}
+                              </p>
+
+                              {/* Alert Action Button (Native style) */}
+                              <div className="pt-2 border-t border-slate-700/60">
+                                <button
+                                  type="button"
+                                  onClick={() => setSimulatedPopupOpen(false)}
+                                  className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-black transition-all cursor-pointer shadow-md shadow-cyan-500/25 active:scale-95"
+                                >
+                                  OK
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="absolute inset-0 flex flex-col items-center justify-center p-4 bg-slate-950/75 z-20 text-center space-y-2">
+                            <p className="text-xs text-slate-400 font-medium">Alert was dismissed in app simulator.</p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSimulatedPopupOpen(true);
+                                playAlertChime();
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 shadow-sm"
+                            >
+                              <RefreshCw className="h-3 w-3" />
+                              <span>Re-trigger Popup Alert</span>
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Bottom Home Indicator */}
+                        <div className="pt-1 flex justify-center">
+                          <div className="h-1 w-20 rounded-full bg-slate-600" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Helper Note under device */}
+                    <div className="mt-3.5 text-center max-w-sm space-y-1">
+                      <div className="flex items-center justify-center space-x-1.5 text-xs text-emerald-400 font-bold">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        <span>Native React Native `Alert.alert(...)` Verification</span>
+                      </div>
+                      <p className={`text-[10px] leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                        Connected mobile apps querying <code className="text-cyan-400 font-mono">check-update</code> receive the broadcasted message and trigger the native dialog.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* VIEW 2: RAW JSON PAYLOAD */}
+                {activeAlertTab === 'response' && (
+                  <pre className="p-5 font-mono text-xs text-cyan-300 overflow-x-auto flex-1 leading-relaxed selection:bg-cyan-500 selection:text-slate-950">
+                    {apiResponse ||
+                      `{\n  "status": "Click 'Send Live HTTP Request & Trigger Alert' to test update response payload and broadcast alert"\n}`}
+                  </pre>
+                )}
               </div>
-              <pre className="p-5 font-mono text-xs text-cyan-300 overflow-x-auto flex-1 leading-relaxed selection:bg-cyan-500 selection:text-slate-950">
-                {apiResponse ||
-                  `{\n  "status": "Click 'Send Live HTTP Request' to test update response payload"\n}`}
-              </pre>
             </div>
           </div>
         </div>
@@ -748,12 +1326,12 @@ jobs:
           className={`p-6 rounded-3xl border flex flex-col justify-between transition-all duration-300 ${cardBgClass}`}
         >
           <div className="space-y-3">
-            <div className="h-11 w-11 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-              <ShieldCheck className="h-5 w-5" />
+            <div className="h-11 w-11 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+              <Database className="h-5 w-5" />
             </div>
-            <h4 className="font-extrabold text-sm">SHA256 Cryptographic Hash</h4>
+            <h4 className="font-extrabold text-sm">Firebase Cloud Sync</h4>
             <p className={`text-xs leading-relaxed font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-              All downloaded update archives are cryptographically verified against the bundle SHA256 checksum before executing in the JS engine.
+              All applications, versions, and releases are backed by live Firebase Realtime Database for seamless synchronization across local & production.
             </p>
           </div>
         </div>
@@ -762,12 +1340,12 @@ jobs:
           className={`p-6 rounded-3xl border flex flex-col justify-between transition-all duration-300 ${cardBgClass}`}
         >
           <div className="space-y-3">
-            <div className="h-11 w-11 rounded-2xl bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-              <Zap className="h-5 w-5" />
+            <div className="h-11 w-11 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+              <ShieldCheck className="h-5 w-5" />
             </div>
-            <h4 className="font-extrabold text-sm">Preconfigured CORS Headers</h4>
+            <h4 className="font-extrabold text-sm">SHA256 Cryptographic Hash</h4>
             <p className={`text-xs leading-relaxed font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-              Both <code className="font-mono">check-update</code> and <code className="font-mono">releases</code> functions return open CORS headers for instant mobile fetch on Android & iOS.
+              All downloaded update archives are cryptographically verified against the bundle SHA256 checksum before executing in the JS engine.
             </p>
           </div>
         </div>

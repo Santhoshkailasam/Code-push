@@ -574,7 +574,7 @@ export const App: React.FC = () => {
               )}
 
               {/* SCREEN 5: INTEGRATION DOCS */}
-              {activeTab === 'docs' && <IntegrationDocs theme={theme} />}
+              {activeTab === 'docs' && <IntegrationDocs theme={theme} currentProject={activeProject} />}
 
               {/* SCREEN 6: RELEASE DETAIL & PLAIN-ENGLISH TIMELINE SCREEN */}
               {activeTab === 'release-detail' && selectedReleaseForDetail && (
