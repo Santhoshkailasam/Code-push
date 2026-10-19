@@ -69,7 +69,7 @@ exports.handler = async (event) => {
         payload = {};
       }
     }
-    const { platform, version, downloadUrl, hash, releaseNotes, mandatory, minAppVersion, bundleBase64, userId: bodyUserId } = payload;
+    const { platform, version, downloadUrl, hash, releaseNotes, mandatory, minAppVersion, bundleBase64, userId: bodyUserId, projectId } = payload;
     const userId = bodyUserId || event.headers['x-user-id'];
 
     if (!platform || !version) {
@@ -111,12 +111,20 @@ exports.handler = async (event) => {
       downloadUrl: effectiveDownloadUrl,
       apiKey: apiKey,
       userId: userId,
+      projectId: projectId || null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       source: 'github-actions'
     };
 
     store[targetPlatform] = newRelease;
+
+    // Store per-project scoped release channel
+    if (projectId) {
+      if (!store.projects) store.projects = {};
+      if (!store.projects[projectId]) store.projects[projectId] = {};
+      store.projects[projectId][targetPlatform] = newRelease;
+    }
     
     // Store per-API Key and per-User ID scoped release channel
     if (apiKey) {
