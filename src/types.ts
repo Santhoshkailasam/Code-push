@@ -45,6 +45,7 @@ export interface ReleaseHistoryItem {
   adoptionStats?: AdoptionStats;
   userId?: string;
   apiKey?: string;
+  projectId?: string;
 }
 
 export interface VersionData {

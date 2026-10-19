@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { ReleaseHistoryItem } from '../../types';
+import type { ReleaseHistoryItem, Project } from '../../types';
 import {
   ArrowLeft,
   Smartphone,
@@ -19,15 +19,18 @@ import {
   GitCommit,
   Layers,
   Globe,
+  Send,
+  Trash2,
 } from 'lucide-react';
 
 interface Props {
   item: ReleaseHistoryItem;
   onBack: () => void;
   theme?: 'dark' | 'light';
+  activeProject?: Project;
 }
 
-export const ReleaseDetailScreen: React.FC<Props> = ({ item, onBack, theme = 'dark' }) => {
+export const ReleaseDetailScreen: React.FC<Props> = ({ item, onBack, theme = 'dark', activeProject }) => {
   const isDark = theme === 'dark';
   const [copiedHash, setCopiedHash] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
@@ -45,6 +48,80 @@ export const ReleaseDetailScreen: React.FC<Props> = ({ item, onBack, theme = 'da
     navigator.clipboard.writeText(url);
     setCopiedUrl(true);
     setTimeout(() => setCopiedUrl(false), 2000);
+  };
+
+  const targetProjectId = item.projectId || activeProject?.id || 'app_rCYp1a_mvdfs5j4_w9dyc';
+  const targetAppName = activeProject?.name || 'Skillswap';
+
+  const [testAlertTitle, setTestAlertTitle] = useState(`CodePush · v${item.version} Test`);
+  const [testAlertMessage, setTestAlertMessage] = useState(`Live test alert for ${targetAppName} (v${item.version})`);
+  const [isSendingAlert, setIsSendingAlert] = useState(false);
+  const [alertSuccessBanner, setAlertSuccessBanner] = useState<string | null>(null);
+  const [alertApiResponse, setAlertApiResponse] = useState<string | null>(null);
+
+  const handleSendAppScopedAlert = async () => {
+    if (!testAlertMessage.trim()) return;
+    setIsSendingAlert(true);
+    setAlertSuccessBanner(null);
+    setAlertApiResponse(null);
+
+    const alertId = `alert_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const payload = {
+      id: alertId,
+      title: testAlertTitle.trim() || 'CodePush Alert Testing',
+      message: testAlertMessage.trim(),
+      type: 'info',
+      platform: item.platform,
+      projectId: targetProjectId,
+      apiKey: item.apiKey || activeProject?.apiKey || null,
+      createdAt: new Date().toISOString(),
+      active: true,
+      targetAppOnly: true, // EXPLICITLY SCOPED TO THIS APP ONLY
+      isGlobal: false,     // NEVER GLOBAL
+    };
+
+    try {
+      const rtdbAlertUrl = 'https://tracker-42b47-default-rtdb.asia-southeast1.firebasedatabase.app/codepush_releases/alerts';
+      
+      // Dispatch alert specifically to this app's dedicated Firebase channel and API
+      await Promise.allSettled([
+        fetch(`${rtdbAlertUrl}/${targetProjectId}.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }),
+        fetch('/.netlify/functions/send-alert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }),
+      ]);
+
+      setAlertSuccessBanner(`Targeted live alert dispatched specifically to ${targetAppName} (${targetProjectId}). Connected devices running this app will receive this popup!`);
+      setAlertApiResponse(JSON.stringify(payload, null, 2));
+      setTimeout(() => setAlertSuccessBanner(null), 6000);
+    } catch (err) {
+      console.warn('Failed to dispatch app-scoped alert:', err);
+    } finally {
+      setIsSendingAlert(false);
+    }
+  };
+
+  const handleClearAppScopedAlert = async () => {
+    try {
+      const rtdbAlertUrl = 'https://tracker-42b47-default-rtdb.asia-southeast1.firebasedatabase.app/codepush_releases/alerts';
+      await Promise.allSettled([
+        fetch(`${rtdbAlertUrl}/${targetProjectId}.json`, {
+          method: 'DELETE',
+        }),
+        fetch(`/.netlify/functions/send-alert?projectId=${targetProjectId}`, {
+          method: 'DELETE',
+        }),
+      ]);
+      setAlertApiResponse(null);
+      setAlertSuccessBanner(`Active alert for ${targetAppName} cleared successfully.`);
+      setTimeout(() => setAlertSuccessBanner(null), 4000);
+    } catch {}
   };
 
   const createdDate = new Date(item.createdAt || Date.now());
@@ -437,6 +514,130 @@ export const ReleaseDetailScreen: React.FC<Props> = ({ item, onBack, theme = 'da
           <span>{copiedHash ? 'Hash Copied!' : 'Copy Full Technical Hash'}</span>
         </button>
       </div>
+
+      {/* SECTION: Targeted App Live Endpoint & Broadcast Testing (Moved to End of Screen) */}
+      <div
+        className={`rounded-3xl border p-6 sm:p-8 transition-all shadow-xl ${
+          isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-slate-200/60'
+        }`}
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div className="flex items-center space-x-3.5">
+            <div className="p-3 rounded-2xl bg-gradient-to-tr from-cyan-500 to-indigo-600 text-white shadow-md shadow-cyan-500/25">
+              <Radio className="h-6 w-6 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <h2 className="text-lg font-black tracking-tight">
+                  Targeted App Live Endpoint & Alert Testing
+                </h2>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] bg-cyan-500/20 text-cyan-400 font-mono font-bold border border-cyan-500/30">
+                  SCOPED: {targetAppName} ONLY
+                </span>
+              </div>
+              <p className={`text-xs font-medium mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                Dispatches broadcast test alerts exclusively to <strong className="text-cyan-400">{targetAppName}</strong> ({targetProjectId}). 
+                This will <strong>NOT</strong> broadcast to any other apps or global channels.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <span className="text-[11px] font-mono px-2.5 py-1 rounded-xl bg-slate-800 text-slate-300 border border-slate-700 font-bold">
+              Target ID: {targetProjectId}
+            </span>
+          </div>
+        </div>
+
+        {alertSuccessBanner && (
+          <div className="mb-5 p-4 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-mono flex items-center justify-between animate-fadeIn">
+            <div className="flex items-center space-x-2.5">
+              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+              <span>{alertSuccessBanner}</span>
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
+          <div>
+            <label className={`block text-xs font-mono font-bold uppercase mb-2 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+              Alert Title (In-App Popup Heading)
+            </label>
+            <input
+              type="text"
+              value={testAlertTitle}
+              onChange={(e) => setTestAlertTitle(e.target.value)}
+              placeholder="e.g. CodePush Alert Testing"
+              className={`w-full px-4 py-2.5 rounded-xl border text-xs font-mono outline-none transition-all ${
+                isDark
+                  ? 'bg-slate-950 border-slate-800 text-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500'
+                  : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500'
+              }`}
+            />
+          </div>
+
+          <div>
+            <label className={`block text-xs font-mono font-bold uppercase mb-2 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+              Broadcast Alert Message (Body)
+            </label>
+            <input
+              type="text"
+              value={testAlertMessage}
+              onChange={(e) => setTestAlertMessage(e.target.value)}
+              placeholder="Enter test message to pop up on phone..."
+              className={`w-full px-4 py-2.5 rounded-xl border text-xs font-mono outline-none transition-all ${
+                isDark
+                  ? 'bg-slate-950 border-slate-800 text-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500'
+                  : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500'
+              }`}
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+          <div className="flex items-center space-x-2 text-xs font-mono text-slate-400">
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+            <span>Target Platform: <strong className="text-white">{item.platform.toUpperCase()}</strong></span>
+            <span>·</span>
+            <span>App: <strong className="text-white">{targetAppName}</strong></span>
+          </div>
+
+          <div className="flex items-center space-x-3">
+            <button
+              type="button"
+              onClick={handleClearAppScopedAlert}
+              className={`px-4 py-2.5 rounded-xl text-xs font-mono font-bold border transition-all cursor-pointer flex items-center space-x-1.5 ${
+                isDark
+                  ? 'border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-white'
+                  : 'border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Clear App Alert</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={isSendingAlert || !testAlertMessage.trim()}
+              onClick={handleSendAppScopedAlert}
+              className="px-5 py-2.5 rounded-xl text-xs font-mono font-bold bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-lg shadow-cyan-500/20 transition-all cursor-pointer flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Send className="h-3.5 w-3.5" />
+              <span>{isSendingAlert ? 'Dispatching to App...' : `Send Test to ${targetAppName} Only`}</span>
+            </button>
+          </div>
+        </div>
+
+        {alertApiResponse && (
+          <div className="mt-4 p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-300">
+            <div className="text-cyan-400 font-bold mb-1 flex items-center space-x-1.5">
+              <CheckCircle2 className="h-3 w-3" />
+              <span>App-Scoped Payload Dispatched to Firebase & Edge:</span>
+            </div>
+            <pre className="text-slate-400 overflow-x-auto">{alertApiResponse}</pre>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
@@ -449,19 +650,37 @@ const RealtimeTelemetryCard: React.FC<{ isDark: boolean }> = ({ isDark }) => {
   useEffect(() => {
     async function fetchTelemetry() {
       try {
-        const res = await fetch(TELEMETRY_URL);
+        const res = await fetch(`${TELEMETRY_URL}?t=${Date.now()}`);
         if (res.ok) {
           const data = await res.json();
-          if (Array.isArray(data)) {
-            setTelemetryLogs(data);
+          const logs = Array.isArray(data)
+            ? data
+            : (data && typeof data === 'object' ? Object.values(data) : []);
+          if (logs.length > 0) {
+            setTelemetryLogs(logs);
+            return;
           }
         }
       } catch (err) {
         console.warn('Telemetry fetch error:', err);
       }
+
+      // Fallback: fetch from Netlify function report-status
+      try {
+        const fallbackRes = await fetch('/.netlify/functions/report-status');
+        if (fallbackRes.ok) {
+          const data = await fallbackRes.json();
+          const logs = Array.isArray(data)
+            ? data
+            : (data && typeof data === 'object' ? Object.values(data) : []);
+          if (logs.length > 0) {
+            setTelemetryLogs(logs);
+          }
+        }
+      } catch {}
     }
     fetchTelemetry();
-    const interval = setInterval(fetchTelemetry, 3500);
+    const interval = setInterval(fetchTelemetry, 2500);
     return () => clearInterval(interval);
   }, []);
 

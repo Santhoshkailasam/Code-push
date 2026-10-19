@@ -582,6 +582,7 @@ export const App: React.FC = () => {
                   item={selectedReleaseForDetail}
                   onBack={() => setActiveTab('history')}
                   theme={theme}
+                  activeProject={activeProject}
                 />
               )}
             </>

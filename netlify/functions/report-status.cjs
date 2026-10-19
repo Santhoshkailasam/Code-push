@@ -5,7 +5,7 @@ exports.handler = async (event) => {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   };
 
   if (event.httpMethod === 'OPTIONS') {
@@ -13,6 +13,17 @@ exports.handler = async (event) => {
   }
 
   try {
+    const store = await getReleaseData();
+    if (!store.telemetry) store.telemetry = [];
+
+    if (event.httpMethod === 'GET') {
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify(store.telemetry),
+      };
+    }
+
     let payload = {};
     if (typeof event.body === 'string') {
       try {
@@ -22,29 +33,37 @@ exports.handler = async (event) => {
       payload = event.body;
     }
 
-    const { platform, version, action, device, apiKey } = payload;
-
-    const store = await getReleaseData();
-    if (!store.telemetry) store.telemetry = [];
+    const { platform, version, action, device, apiKey, projectId } = payload;
 
     const newPing = {
       id: `ping_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
       date: new Date().toISOString(),
       platform: platform || 'android',
-      device: device || (platform === 'ios' ? 'iPhone Mobile' : 'Android Mobile Phone'),
+      device: device || (platform === 'ios' ? 'iPhone Mobile Phone' : 'Android Mobile Phone'),
       version: version || '1.0.0',
       action: action || 'Mobile app checked for updates',
       apiKey: apiKey || 'default',
+      projectId: projectId || null,
     };
 
-    // Keep latest 20 live pings
+    // Keep latest 30 live pings
     store.telemetry.unshift(newPing);
-    if (store.telemetry.length > 20) {
-      store.telemetry = store.telemetry.slice(0, 20);
+    if (store.telemetry.length > 30) {
+      store.telemetry = store.telemetry.slice(0, 30);
     }
 
     await setReleaseData(store);
+    try {
+      await fetch(
+        'https://tracker-42b47-default-rtdb.asia-southeast1.firebasedatabase.app/codepush_releases/telemetry.json',
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(store.telemetry),
+        }
+      );
+    } catch {}
 
     return {
       statusCode: 200,

@@ -80,10 +80,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const CODEPUSH_SERVER_URL = 'https://codepushs.netlify.app';
 
 // Your App API Key (from CodePush Dashboard -> Profile & API Keys)
-const CODEPUSH_API_KEY = 'cp_live_YOUR_API_KEY_HERE';
+const CODEPUSH_API_KEY = '${currentProject?.apiKey || 'cp_live_rCYp1a_mvdfs5j4_live_key'}';
 
-// Your App ID (optional, to scope releases directly to this app)
-const CODEPUSH_APP_ID = 'app_rCYp1a_mvdfs5j4_w9dyc';
+// Your App ID (scopes releases and alerts specifically to this app)
+const CODEPUSH_APP_ID = '${currentProject?.id || 'app_rCYp1a_mvdfs5j4_w9dyc'}';
 
 const BUNDLE_VERSION_KEY = '@codepush_bundle_version';
 
@@ -94,21 +94,150 @@ export interface UpdateCheckResponse {
   mandatory: boolean;
   hash: string;
   releaseNotes?: string;
-  alertMessage?: string; // Broadcast test alert message
-  alertTitle?: string;   // Optional alert popup title
+  alertMessage?: string;
+  alertTitle?: string;
   alertId?: string;
+}
+
+// Track alerts that have already been shown on this device so they are never repeated
+const shownAlertIds = new Set<string>();
+
+/**
+ * Deactivates the broadcast alert on the server so reopening the app will never re-show it
+ */
+async function dismissAlertOnServer(alertId?: string): Promise<void> {
+  try {
+    const rtdbAlertUrl = 'https://tracker-42b47-default-rtdb.asia-southeast1.firebasedatabase.app/codepush_releases/alerts';
+    await Promise.allSettled([
+      fetch(\`\${rtdbAlertUrl}/latest.json\`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: false, dismissedAt: new Date().toISOString() }),
+      }),
+      fetch(\`\${rtdbAlertUrl}/\${CODEPUSH_APP_ID}.json\`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: false, dismissedAt: new Date().toISOString() }),
+      }),
+      fetch(\`\${CODEPUSH_SERVER_URL}/.netlify/functions/send-alert?projectId=\${CODEPUSH_APP_ID}\`, {
+        method: 'DELETE',
+      }),
+    ]);
+  } catch {
+    // Silent fail in background
+  }
+}
+
+/**
+ * Displays an in-app test broadcast alert exactly ONCE
+ */
+function displayAlertOnce(alert: {
+  id?: string;
+  title?: string;
+  message?: string;
+  active?: boolean;
+  createdAt?: string;
+}): void {
+  if (!alert || !alert.message) return;
+  if (alert.active === false) return;
+
+  // Ignore stale alerts sent more than 5 minutes ago
+  if (alert.createdAt) {
+    const ageMs = Date.now() - new Date(alert.createdAt).getTime();
+    if (ageMs > 5 * 60 * 1000) {
+      dismissAlertOnServer(alert.id);
+      return;
+    }
+  }
+
+  const id = alert.id || alert.message;
+  if (shownAlertIds.has(id)) {
+    return; // Already shown! Do not repeat!
+  }
+
+  shownAlertIds.add(id);
+
+  // Show the alert only ONCE
+  Alert.alert(
+    alert.title || 'CodePush Alert Testing',
+    alert.message,
+    [{ text: 'OK' }]
+  );
+
+  // Immediately deactivate on the server so reopening the app will never re-show it
+  dismissAlertOnServer(alert.id);
+}
+
+/**
+ * Sends a real-time mobile device ping to the CodePush Dashboard telemetry stream
+ */
+async function sendTelemetryPing(action: string, version?: string): Promise<void> {
+  try {
+    const platform = Platform.OS;
+    const currentVersion = version || (await AsyncStorage.getItem(BUNDLE_VERSION_KEY)) || '1.0.0';
+    const device = platform === 'ios' ? 'iPhone Mobile Phone' : 'Android Mobile Phone';
+    const ping = {
+      id: \`ping_\${Date.now()}_\${Math.random().toString(36).substring(2, 6)}\`,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      date: new Date().toISOString(),
+      platform,
+      device,
+      version: currentVersion,
+      action,
+      apiKey: CODEPUSH_API_KEY,
+      projectId: CODEPUSH_APP_ID,
+    };
+
+    // 1. Send to Netlify report-status endpoint
+    fetch(\`\${CODEPUSH_SERVER_URL}/.netlify/functions/report-status\`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(ping),
+    }).catch(() => {});
+
+    // 2. Also directly push to Firebase RTDB for instantaneous live stream in Dashboard
+    try {
+      const rtdbRes = await fetch(
+        'https://tracker-42b47-default-rtdb.asia-southeast1.firebasedatabase.app/codepush_releases/telemetry.json'
+      );
+      let existingLogs: unknown[] = [];
+      if (rtdbRes.ok) {
+        const data = await rtdbRes.json();
+        existingLogs = Array.isArray(data)
+          ? data
+          : data && typeof data === 'object'
+          ? Object.values(data)
+          : [];
+      }
+      existingLogs.unshift(ping);
+      if (existingLogs.length > 30) existingLogs = existingLogs.slice(0, 30);
+
+      await fetch(
+        'https://tracker-42b47-default-rtdb.asia-southeast1.firebasedatabase.app/codepush_releases/telemetry.json',
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(existingLogs),
+        }
+      );
+    } catch {}
+  } catch {}
 }
 
 export const CodePushService = {
   /**
-   * Checks Netlify serverless endpoint for available JS bundle updates & broadcast alerts
+   * Connects to CodePush console to check for updates.
+   * If an update is available, it silently installs the update without asking for permission!
    */
   async checkForUpdates(): Promise<void> {
     try {
       const platform = Platform.OS; // 'android' | 'ios'
       const currentVersion = (await AsyncStorage.getItem(BUNDLE_VERSION_KEY)) || '1.0.0';
 
-      console.log(\`[CodePush] Checking updates for \${platform} (Active: v\${currentVersion})...\`);
+      console.log(\`[CodePush] Checking updates for \${platform} (Active: v\${currentVersion}, App: \${CODEPUSH_APP_ID})...\`);
+
+      // Send live ping to dashboard immediately
+      sendTelemetryPing(\`Mobile app active · Checking update (Active: v\${currentVersion})\`);
 
       const queryParams = new URLSearchParams({
         platform,
@@ -131,21 +260,34 @@ export const CodePushService = {
 
       const data: UpdateCheckResponse = await res.json();
 
-      // 🔔 1. Display in-app popup alert if sent from CodePush Console
+      // 🔔 1. Display in-app popup alert only ONCE if sent from dashboard
       if (data.alertMessage) {
-        Alert.alert(
-          data.alertTitle || 'CodePush Alert Testing',
-          data.alertMessage,
-          [{ text: 'OK', onPress: () => console.log('CodePush alert acknowledged') }]
-        );
+        displayAlertOnce({
+          id: data.alertId,
+          title: data.alertTitle,
+          message: data.alertMessage,
+          active: true,
+        });
       }
 
-      // ⚡ 2. Download and apply OTA bundle if update available
+      // ⚡ 2. Over-The-Air Update: SILENT INSTALL WITHOUT ASKING PERMISSION
       if (data.updateAvailable && data.downloadUrl) {
-        console.log(\`⚡ [CodePush] New OTA update detected: v\${data.latestVersion}\`);
+        console.log(\`⚡ [CodePush] New OTA update available: v\${data.latestVersion}. Installing silently...\`);
+
+        sendTelemetryPing(\`Update v\${data.latestVersion} found · Alert shown (Ready to download)\`, data.latestVersion);
+
+        // Show informational message that version is ready to download (no permission prompt)
+        Alert.alert(
+          'CodePush Update',
+          \`Version \${data.latestVersion} is ready to download.\\nInstalling update silently in the background...\`,
+          [{ text: 'OK' }]
+        );
+
+        // Download and apply the bundle silently
         await this.downloadAndApplyUpdate(data.downloadUrl, data.latestVersion);
       } else {
         console.log('✅ [CodePush] App is fully up to date.');
+        sendTelemetryPing(\`Update check complete · App up to date (Active: v\${currentVersion})\`);
       }
     } catch (err) {
       console.warn('[CodePush] Update check failed:', err);
@@ -153,54 +295,69 @@ export const CodePushService = {
   },
 
   /**
-   * 📡 Listens for live alerts sent from CodePush dashboard in REAL TIME.
-   * Pops up immediately on the phone the moment you click Send!
+   * 📡 REAL-TIME LISTENER:
+   * Listens for live alerts sent from CodePush dashboard in REAL TIME.
+   * Checks app-specific channel first, then global channel.
+   * Displays exactly ONCE on mobile and never loops!
    */
   startLiveAlertListener(): () => void {
-    let lastAlertId: string | null = null;
     const checkAlert = async () => {
       try {
-        const res = await fetch('https://tracker-42b47-default-rtdb.asia-southeast1.firebasedatabase.app/codepush_releases/alerts/latest.json');
-        if (!res.ok) return;
-        const alert = await res.json();
-        if (alert && alert.active && alert.id && alert.id !== lastAlertId) {
-          lastAlertId = alert.id;
-          Alert.alert(alert.title || 'CodePush Alert Testing', alert.message, [{ text: 'OK' }]);
+        const rtdbBase = 'https://tracker-42b47-default-rtdb.asia-southeast1.firebasedatabase.app/codepush_releases/alerts';
+
+        // 1. Check App-Specific channel first (scoped to this mobile app only)
+        let alert: { id?: string; title?: string; message?: string; active?: boolean; createdAt?: string } | null = null;
+        if (CODEPUSH_APP_ID) {
+          const appRes = await fetch(\`\${rtdbBase}/\${CODEPUSH_APP_ID}.json\`);
+          if (appRes.ok) {
+            const data = await appRes.json();
+            if (data && data.active && data.message) {
+              alert = data;
+            }
+          }
         }
-      } catch (err) {}
+
+        // 2. Fallback to latest global channel
+        if (!alert) {
+          const globalRes = await fetch(\`\${rtdbBase}/latest.json\`);
+          if (globalRes.ok) {
+            const data = await globalRes.json();
+            if (data && data.active && data.message) {
+              alert = data;
+            }
+          }
+        }
+
+        // If an alert is active and has not been shown yet:
+        if (alert && alert.active && alert.message) {
+          displayAlertOnce(alert);
+        }
+      } catch {}
     };
+
     checkAlert();
-    const interval = setInterval(checkAlert, 2500); // 2.5s live polling
+    const interval = setInterval(checkAlert, 2000); // 2s live polling
     return () => clearInterval(interval);
   },
 
-
   /**
-   * Downloads zip package, unzips bundle, updates storage & restarts JS runtime
+   * Downloads zip package, unzips bundle, updates storage & restarts JS runtime silently
    */
   async downloadAndApplyUpdate(downloadUrl: string, newVersion: string): Promise<void> {
     const downloadDest = \`\${RNFS.CachesDirectoryPath}/bundle-update.zip\`;
     const extractPath = \`\${RNFS.DocumentDirectoryPath}/codepush_bundle\`;
 
-    // 1. Download JS bundle archive from Netlify Edge CDN
     const downloadResult = await RNFS.downloadFile({
       fromUrl: downloadUrl,
       toFile: downloadDest,
     }).promise;
 
     if (downloadResult.statusCode === 200) {
-      // 2. Extract archive to app documents directory
       await unzip(downloadDest, extractPath);
-
-      // 3. Update active version record in AsyncStorage
       await AsyncStorage.setItem(BUNDLE_VERSION_KEY, newVersion);
-
-      // 4. Clean up downloaded zip archive file
       await RNFS.unlink(downloadDest);
-
       console.log('🎉 [CodePush] Hotfix installed! Reloading app JS engine...');
-
-      // 5. Instantly restart React Native JS runtime engine
+      sendTelemetryPing(\`Update v\${newVersion} downloaded & applied silently in background\`, newVersion);
       RNRestart.Restart();
     }
   },

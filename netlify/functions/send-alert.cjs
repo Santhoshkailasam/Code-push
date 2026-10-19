@@ -19,8 +19,14 @@ exports.handler = async (event) => {
     // Handle DELETE to clear alerts
     if (event.httpMethod === 'DELETE') {
       const projectId = event.queryStringParameters ? event.queryStringParameters.projectId : null;
-      if (projectId && store.alerts[projectId]) {
-        delete store.alerts[projectId];
+      if (projectId) {
+        if (store.alerts[projectId]) delete store.alerts[projectId];
+        if (store.alerts.latest && (!store.alerts.latest.projectId || store.alerts.latest.projectId === projectId)) {
+          delete store.alerts.latest;
+        }
+        if (store.alerts.global && (!store.alerts.global.projectId || store.alerts.global.projectId === projectId)) {
+          delete store.alerts.global;
+        }
       } else {
         store.alerts = {};
       }
@@ -60,7 +66,7 @@ exports.handler = async (event) => {
       payload = event.body;
     }
 
-    const { message, title, projectId, platform, apiKey, type } = payload;
+    const { message, title, projectId, platform, apiKey, type, isGlobal, targetAppOnly } = payload;
 
     if (!message || !message.trim()) {
       return {
@@ -81,14 +87,20 @@ exports.handler = async (event) => {
       apiKey: apiKey || null,
       createdAt: new Date().toISOString(),
       active: true,
+      targetAppOnly: Boolean(targetAppOnly || (projectId && isGlobal === false)),
     };
 
-    // Store in global, latest, and scoped by project/platform if provided
-    store.alerts.latest = newAlert;
-    store.alerts.global = newAlert;
+    // Scoped storage:
     if (projectId) store.alerts[projectId] = newAlert;
     if (platform && platform !== 'all') store.alerts[platform] = newAlert;
     if (apiKey) store.alerts[apiKey] = newAlert;
+
+    // Only broadcast to latest/global if explicitly global or no projectId is specified
+    const shouldBroadcastGlobally = isGlobal !== false && !targetAppOnly;
+    if (shouldBroadcastGlobally) {
+      store.alerts.latest = newAlert;
+      store.alerts.global = newAlert;
+    }
 
     // Log telemetry ping for this broadcast
     if (!store.telemetry) store.telemetry = [];
