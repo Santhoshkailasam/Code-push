@@ -228,11 +228,7 @@ export const App: React.FC = () => {
     return () => unsubscribe();
   }, [user?.uid, activeProjectId]);
 
-  useEffect(() => {
-    if (!activeProjectId) return;
-    const userApiKey = getUserApiKey(user?.uid);
-    saveVersionData(data, user?.uid, userApiKey, activeProjectId);
-  }, [data, user?.uid, activeProjectId]);
+
 
   useEffect(() => {
     if (theme === 'light') {

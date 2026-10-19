@@ -15,14 +15,16 @@ async function getReleaseData() {
 }
 
 async function setReleaseData(data) {
-  try {
-    await fetch(FIREBASE_DB_URL, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-  } catch (err) {
-    console.warn('[CodePush Store] Firebase save error:', err.message);
+  // Exclude large binary bundles from metadata update so Netlify serverless saves in <100ms without timing out
+  const { bundles, ...lightweightStore } = data;
+  const res = await fetch(FIREBASE_DB_URL, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(lightweightStore)
+  });
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Firebase RTDB write failed (HTTP ${res.status}): ${errorText}`);
   }
 }
 
