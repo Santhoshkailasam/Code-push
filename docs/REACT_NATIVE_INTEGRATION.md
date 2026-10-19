@@ -244,7 +244,7 @@ To publish releases automatically whenever you push code to GitHub:
 3. Create `.github/workflows/codepush.yml`:
 
 ```yaml
-name: CodePush Auto-Release
+name: CodePush Auto-Release & Live Sync
 
 on:
   push:
@@ -253,7 +253,7 @@ on:
       - master
 
 jobs:
-  publish-ota:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: 📥 Checkout code
@@ -267,26 +267,88 @@ jobs:
       - name: 📦 Install Dependencies
         run: npm ci
 
-      - name: ⚙️ Generate Version
+      - name: ⚙️ Generate Version & Metadata
         id: vars
         run: |
-          VERSION="1.0.$(date +'%Y%m%d%H%M')"
+          VERSION="1.1.$(date +'%Y%m%d%H%M')"
           COMMIT_MSG=$(git log -1 --pretty=%B)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "commit_msg=$COMMIT_MSG" >> $GITHUB_OUTPUT
 
-      - name: 🚀 Publish Release to CodePush Server
+      - name: 📦 Compile React Native Android Bundle
         run: |
-          curl -X POST "https://codepushs.netlify.app/.netlify/functions/publish-release" \
-            -H "Content-Type: application/json" \
-            -H "x-codepush-api-key: ${{ secrets.CODEPUSH_API_KEY }}" \
-            -d '{
-              "platform": "android",
-              "version": "${{ steps.vars.outputs.version }}",
-              "downloadUrl": "https://codepushs.netlify.app/bundles/android-${{ steps.vars.outputs.version }}.zip",
-              "mandatory": true,
-              "releaseNotes": "${{ steps.vars.outputs.commit_msg }}"
-            }'
+          mkdir -p build_bundle/res
+          npx react-native bundle \
+            --platform android \
+            --dev false \
+            --entry-file index.js \
+            --bundle-output build_bundle/index.android.bundle \
+            --assets-dest build_bundle/res
+
+      - name: 🗜️ Archive Bundle to ZIP
+        run: |
+          cd build_bundle
+          zip -r ../bundle.zip index.android.bundle res
+          cd ..
+
+      - name: 🚀 Publish Release to CodePush Server
+        run: node scripts/publish-release.mjs
+        env:
+          RELEASE_VERSION: ${{ steps.vars.outputs.version }}
+          COMMIT_MSG: ${{ steps.vars.outputs.commit_msg }}
+          CODEPUSH_API_KEY: ${{ secrets.CODEPUSH_API_KEY }}
+          CODEPUSH_PROJECT_ID: "app_rCYp1a_mvdfs5j4_w9dyc"
+```
+
+4. Create `scripts/publish-release.mjs`:
+
+```javascript
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
+
+async function main() {
+  const version = process.env.RELEASE_VERSION || `1.1.${Date.now()}`;
+  const commitMsg = process.env.COMMIT_MSG || 'App update';
+  const apiKey = process.env.CODEPUSH_API_KEY;
+  const projectId = process.env.CODEPUSH_PROJECT_ID;
+
+  let bundleBase64 = null;
+  let bundleHash = `sha256-${Date.now()}`;
+  const zipPath = path.resolve('bundle.zip');
+
+  if (fs.existsSync(zipPath)) {
+    const fileBuffer = fs.readFileSync(zipPath);
+    bundleBase64 = fileBuffer.toString('base64');
+    const hashSum = crypto.createHash('sha256');
+    hashSum.update(fileBuffer);
+    bundleHash = hashSum.digest('hex');
+  }
+
+  const payload = {
+    platform: 'android',
+    projectId: projectId,
+    version: version,
+    bundleBase64: bundleBase64,
+    hash: bundleHash,
+    downloadUrl: `https://codepushs.netlify.app/.netlify/functions/download-bundle?version=${version}&platform=android`,
+    mandatory: true,
+    releaseNotes: `Git Push: ${commitMsg}`
+  };
+
+  const res = await fetch('https://codepushs.netlify.app/.netlify/functions/publish-release', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-codepush-api-key': apiKey },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    console.error('Publish failed');
+    process.exit(1);
+  }
+}
+
+main();
 ```
 
 ---

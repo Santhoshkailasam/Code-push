@@ -15,16 +15,32 @@ async function getReleaseData() {
 }
 
 async function setReleaseData(data) {
-  // Exclude large binary bundles from metadata update so Netlify serverless saves in <100ms without timing out
   const { bundles, ...lightweightStore } = data;
-  const res = await fetch(FIREBASE_DB_URL, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(lightweightStore)
-  });
-  if (!res.ok) {
-    const errorText = await res.text();
-    throw new Error(`Firebase RTDB write failed (HTTP ${res.status}): ${errorText}`);
+  const promises = [
+    fetch(FIREBASE_DB_URL, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(lightweightStore)
+    })
+  ];
+
+  if (bundles && Object.keys(bundles).length > 0) {
+    const BUNDLES_DB_URL = 'https://tracker-42b47-default-rtdb.asia-southeast1.firebasedatabase.app/codepush_releases/bundles.json';
+    promises.push(
+      fetch(BUNDLES_DB_URL, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bundles)
+      })
+    );
+  }
+
+  const results = await Promise.all(promises);
+  for (const res of results) {
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`Firebase RTDB write failed (HTTP ${res.status}): ${errorText}`);
+    }
   }
 }
 
