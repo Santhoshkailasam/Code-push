@@ -63,6 +63,7 @@ export const IntegrationScreen: React.FC<IntegrationScreenProps> = ({
     step3: false,
     step4: false,
     step5: false,
+    step6: false,
   });
 
   const activeApiKey = currentProject?.apiKey || 'cp_live_rCYp1a_mvdfs5j4_live_key';
@@ -332,7 +333,7 @@ jobs:
     if (stepDoneKey) {
       markStepDone(stepDoneKey);
     }
-    setCurrentStep((prev) => Math.min(prev + 1, 5));
+    setCurrentStep((prev) => Math.min(prev + 1, 6));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -346,9 +347,10 @@ jobs:
     { id: 0, label: 'Overview', subtitle: 'Project credentials', icon: BookOpen },
     { id: 1, label: 'Dependencies', subtitle: 'npm packages', icon: Terminal, key: 'step1' },
     { id: 2, label: 'Config File', subtitle: 'codepush.json', icon: FileCode2, key: 'step2' },
-    { id: 3, label: 'Services & Manifest', subtitle: 'Code & Permissions', icon: Zap, key: 'step3' },
-    { id: 4, label: 'App.tsx', subtitle: 'Root hook', icon: Code2, key: 'step4' },
-    { id: 5, label: 'CI/CD YAML', subtitle: 'codepush-release.yml', icon: GitBranch, key: 'step5' },
+    { id: 3, label: 'Client Services', subtitle: 'CodePush & Push Services', icon: Zap, key: 'step3' },
+    { id: 4, label: 'Android & FCM', subtitle: 'Permissions & Firebase', icon: Smartphone, key: 'step4' },
+    { id: 5, label: 'App.tsx', subtitle: 'Root hook', icon: Code2, key: 'step5' },
+    { id: 6, label: 'CI/CD YAML', subtitle: 'codepush-release.yml', icon: GitBranch, key: 'step6' },
   ];
 
   return (
@@ -389,18 +391,18 @@ jobs:
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-bold text-slate-300">Steps</span>
-                <span className={`font-mono font-bold ${completedStepsCount === 5 ? 'text-emerald-400' : 'text-cyan-400'}`}>
-                  {completedStepsCount} / 5 Done
+                <span className={`font-mono font-bold ${completedStepsCount === 6 ? 'text-emerald-400' : 'text-cyan-400'}`}>
+                  {completedStepsCount} / 6 Done
                 </span>
               </div>
               <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
                 <div
                   className={`h-full transition-all duration-500 rounded-full ${
-                    completedStepsCount === 5
+                    completedStepsCount === 6
                       ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
                       : 'bg-gradient-to-r from-cyan-500 to-indigo-500'
                   }`}
-                  style={{ width: `${(completedStepsCount / 5) * 100}%` }}
+                  style={{ width: `${(completedStepsCount / 6) * 100}%` }}
                 />
               </div>
             </div>
@@ -868,11 +870,11 @@ jobs:
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400">
-                    Step 3 of 5
+                    Step 3 of 6
                   </span>
-                  <h2 className="text-xl font-black tracking-tight">Add Services & Android Manifest</h2>
+                  <h2 className="text-xl font-black tracking-tight">Add Client Services</h2>
                   <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                    Save both services into <code className="text-cyan-400 font-mono">src/services/</code> and update <code className="text-cyan-400 font-mono">AndroidManifest.xml</code>.
+                    Save both services into <code className="text-cyan-400 font-mono">src/services/</code>.
                   </p>
                 </div>
 
@@ -995,7 +997,76 @@ jobs:
                     </button>
                   </div>
                 </div>
+              </div>
 
+              {/* Instructions Card */}
+              <div className={`p-4 rounded-2xl border space-y-2.5 ${subCardBgClass}`}>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center space-x-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
+                  <span>Instructions</span>
+                </h4>
+                <ol className="list-decimal list-inside space-y-1.5 text-xs text-slate-300 leading-relaxed">
+                  <li>Create a directory named <code className="text-cyan-400 font-mono">src/services/</code> in your React Native project.</li>
+                  <li>Click <strong className="text-white">Download</strong> on both services above and place them into <code className="text-cyan-400 font-mono">src/services/</code>.</li>
+                  <li>These services manage silent OTA updates, instant background push alerts, and crash recovery.</li>
+                </ol>
+              </div>
+
+              {/* Stepper Navigation Footer */}
+              <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={goToPrevStep}
+                  className="flex items-center space-x-1 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  <span>Back</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => goToNextStep('step3')}
+                  className="flex items-center space-x-1.5 px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs transition-all shadow-md shadow-indigo-500/20 active:scale-95 cursor-pointer"
+                >
+                  <span>Next: Android & FCM</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ---------------------------------------------------- */}
+          {/* STEP 4: NATIVE ANDROID & FIREBASE FCM SETUP */}
+          {/* ---------------------------------------------------- */}
+          {currentStep === 4 && (
+            <div className={`p-5 sm:p-6 rounded-3xl border space-y-5 ${cardBgClass} animate-fade-in`}>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-pink-400">
+                    Step 4 of 6
+                  </span>
+                  <h2 className="text-xl font-black tracking-tight">Android & Firebase FCM Setup</h2>
+                  <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                    Configure AndroidManifest permissions, root <code className="text-purple-400 font-mono">index.js</code> background handler, and <code className="text-amber-400 font-mono">google-services.json</code>.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => toggleChecklist('step4')}
+                  className={`flex items-center space-x-1 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    checklist.step4
+                      ? 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-400'
+                      : 'bg-slate-800/80 hover:bg-slate-700 text-slate-400 border border-slate-700'
+                  }`}
+                >
+                  {checklist.step4 ? <Check className="h-3.5 w-3.5" /> : <div className="h-3 w-3 rounded border border-slate-500" />}
+                  <span>{checklist.step4 ? 'Done' : 'Mark Done'}</span>
+                </button>
+              </div>
+
+              {/* Native Setup Cards */}
+              <div className="space-y-3">
                 {/* File 3: AndroidManifest.xml Permissions */}
                 <div className={`p-4 rounded-2xl border flex flex-col gap-3 ${subCardBgClass}`}>
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1173,12 +1244,10 @@ jobs:
               {/* Instructions Card */}
               <div className={`p-4 rounded-2xl border space-y-2.5 ${subCardBgClass}`}>
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center space-x-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-pink-400" />
                   <span>Instructions</span>
                 </h4>
                 <ol className="list-decimal list-inside space-y-1.5 text-xs text-slate-300 leading-relaxed">
-                  <li>Create a directory named <code className="text-cyan-400 font-mono">src/services/</code> in your project.</li>
-                  <li>Click <strong className="text-white">Download</strong> on both services above and place them into <code className="text-cyan-400 font-mono">src/services/</code>.</li>
                   <li>In your <code className="text-white font-mono">android/app/src/main/AndroidManifest.xml</code>, paste the permissions block inside the <code className="text-emerald-400 font-mono">&lt;manifest&gt;</code> tag.</li>
                   <li>Replace your root <code className="text-white font-mono">index.js</code> with the background-enabled template to handle push notifications when the app is closed.</li>
                   <li>Download <code className="text-amber-400 font-mono">google-services.json</code> from Firebase Console and add the Gradle plugins to enable FCM device tokens.</li>
@@ -1198,8 +1267,8 @@ jobs:
 
                 <button
                   type="button"
-                  onClick={() => goToNextStep('step3')}
-                  className="flex items-center space-x-1.5 px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs transition-all shadow-md shadow-indigo-500/20 active:scale-95 cursor-pointer"
+                  onClick={() => goToNextStep('step4')}
+                  className="flex items-center space-x-1.5 px-5 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-bold text-xs transition-all shadow-md shadow-pink-500/20 active:scale-95 cursor-pointer"
                 >
                   <span>Next: App.tsx</span>
                   <ArrowRight className="h-3.5 w-3.5" />
@@ -1209,14 +1278,14 @@ jobs:
           )}
 
           {/* ---------------------------------------------------- */}
-          {/* STEP 4: INITIALIZE IN APP.TSX */}
+          {/* STEP 5: INITIALIZE IN APP.TSX */}
           {/* ---------------------------------------------------- */}
-          {currentStep === 4 && (
+          {currentStep === 6 && (
             <div className={`p-5 sm:p-6 rounded-3xl border space-y-5 ${cardBgClass} animate-fade-in`}>
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-purple-400">
-                    Step 4 of 5
+                    Step 5 of 6
                   </span>
                   <h2 className="text-xl font-black tracking-tight">Hook into App.tsx</h2>
                   <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
@@ -1226,9 +1295,9 @@ jobs:
 
                 <button
                   type="button"
-                  onClick={() => toggleChecklist('step4')}
+                  onClick={() => toggleChecklist('step6')}
                   className={`flex items-center space-x-1 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    checklist.step4
+                    checklist.step6
                       ? 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-400'
                       : 'bg-slate-800/80 hover:bg-slate-700 text-slate-400 border border-slate-700'
                   }`}
@@ -1322,10 +1391,10 @@ jobs:
 
                 <button
                   type="button"
-                  onClick={() => goToNextStep('step4')}
+                  onClick={() => goToNextStep('step5')}
                   className="flex items-center space-x-1.5 px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-rose-600 hover:from-purple-500 hover:to-rose-500 text-white font-bold text-xs transition-all shadow-md shadow-purple-500/20 active:scale-95 cursor-pointer"
                 >
-                  <span>Next: Release</span>
+                  <span>Next: CI/CD YAML</span>
                   <ArrowRight className="h-3.5 w-3.5" />
                 </button>
               </div>
@@ -1333,14 +1402,14 @@ jobs:
           )}
 
           {/* ---------------------------------------------------- */}
-          {/* STEP 5: CI/CD AUTOMATION (codepush-release.yml) */}
+          {/* STEP 6: CI/CD AUTOMATION (codepush-release.yml) */}
           {/* ---------------------------------------------------- */}
           {currentStep === 5 && (
             <div className={`p-5 sm:p-6 rounded-3xl border space-y-5 ${cardBgClass} animate-fade-in`}>
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
-                    Step 5 of 5
+                    Step 6 of 6
                   </span>
                   <h2 className="text-xl font-black tracking-tight">CI/CD Automation</h2>
                   <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
@@ -1446,7 +1515,7 @@ jobs:
 
                 <button
                   type="button"
-                  onClick={() => markStepDone('step5')}
+                  onClick={() => markStepDone('step6')}
                   className="flex items-center space-x-1.5 px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold text-xs transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
                 >
                   <Check className="h-3.5 w-3.5" />
