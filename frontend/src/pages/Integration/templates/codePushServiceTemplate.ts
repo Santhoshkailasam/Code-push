@@ -121,7 +121,7 @@ async function displayAlertOnce(alert: {
 }): Promise<void> {
   if (!alert || !alert.message) return;
   await ensureStorageLoaded();
-  const id = alert.id || `${alert.title || ''}:::${alert.message}`;
+  const id = alert.id || (alert.title || '') + ':::' + alert.message;
   if (shownAlertIds.has(id)) return;
 
   // Stale alert check: do not show past alerts on app startup
