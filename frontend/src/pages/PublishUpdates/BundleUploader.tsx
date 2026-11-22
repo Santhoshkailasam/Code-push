@@ -40,6 +40,7 @@ interface Props {
     mandatory: boolean;
     releaseNotes: string;
     fileName: string;
+    bundleBase64?: string;
     hash?: string;
     signature?: string;
     signatureAlgorithm?: 'ed25519' | 'sha256-hmac';
@@ -301,12 +302,31 @@ export const BundleUploader: React.FC<Props> = ({
       finalSignature = sigData.signature;
     }
 
+    let bundleBase64: string | undefined = undefined;
+    if (selectedFile) {
+      try {
+        bundleBase64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const res = (reader.result as string) || '';
+            const commaIdx = res.indexOf(',');
+            resolve(commaIdx !== -1 ? res.substring(commaIdx + 1) : res);
+          };
+          reader.onerror = () => resolve('');
+          reader.readAsDataURL(selectedFile);
+        });
+      } catch (readErr) {
+        console.warn('Failed to encode bundle file to base64:', readErr);
+      }
+    }
+
     onPublish({
       platform,
       version: bundleVersion,
       mandatory,
       releaseNotes: releaseNotes || 'Hotfix patch deployed via CodePush Console',
       fileName: selectedFile ? selectedFile.name : `${platform}-bundle-v${bundleVersion}.zip`,
+      bundleBase64: bundleBase64 && bundleBase64.length > 0 ? bundleBase64 : undefined,
       hash: finalHash,
       signature: enableSignature ? (finalSignature || undefined) : undefined,
       signatureAlgorithm: enableSignature ? 'ed25519' : undefined,

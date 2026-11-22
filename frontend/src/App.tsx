@@ -466,6 +466,7 @@ export const App: React.FC = () => {
     mandatory,
     releaseNotes,
     fileName: _fileName,
+    bundleBase64,
     hash,
     sizeBytes,
     track = 'production',
@@ -486,6 +487,7 @@ export const App: React.FC = () => {
     mandatory: boolean;
     releaseNotes: string;
     fileName: string;
+    bundleBase64?: string;
     hash?: string;
     signature?: string;
     signatureAlgorithm?: 'ed25519' | 'sha256-hmac';
@@ -519,6 +521,7 @@ export const App: React.FC = () => {
       releaseNotes,
       createdAt: new Date().toISOString(),
       downloadUrl: `https://codepushs.netlify.app/.netlify/functions/download-bundle?version=${version}&platform=${platform}`,
+      bundleBase64: bundleBase64 || undefined,
       sizeBytes: sizeBytes || 1024 * 180,
       userId: user?.uid,
       apiKey: userApiKey,
@@ -583,6 +586,7 @@ export const App: React.FC = () => {
         version,
         mandatory,
         releaseNotes,
+        bundleBase64: bundleBase64 || undefined,
         downloadUrl: `https://codepushs.netlify.app/.netlify/functions/download-bundle?version=${version}&platform=${platform}`,
         hash: finalHash,
         signature,

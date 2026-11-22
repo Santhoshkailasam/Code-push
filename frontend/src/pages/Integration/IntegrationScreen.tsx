@@ -31,6 +31,7 @@ import { getPushNotificationServiceTemplate } from './templates/pushNotification
 import { getAndroidManifestTemplate, getAndroidManifestPermissionsSnippet } from './templates/androidManifestTemplate';
 import { getIndexJsTemplate } from './templates/indexJsTemplate';
 import { getFirebaseSetupGuide } from './templates/firebaseSetupTemplate';
+import { getCodePushNativeModuleCode, getCodePushPackageCode, getMainApplicationSnippet } from './templates/codePushNativeTemplate';
 
 interface IntegrationScreenProps {
   theme?: 'dark' | 'light';
@@ -198,6 +199,18 @@ const styles = StyleSheet.create({
     downloadFile('App.tsx', appTsxExampleCode, 'text/typescript');
   };
 
+  const codePushNativeModuleCode = getCodePushNativeModuleCode();
+  const codePushPackageCode = getCodePushPackageCode();
+  const mainApplicationSnippet = getMainApplicationSnippet();
+
+  const handleDownloadCodePushNativeModule = () => {
+    downloadFile('CodePushNativeModule.kt', codePushNativeModuleCode, 'text/x-kotlin');
+  };
+
+  const handleDownloadCodePushPackage = () => {
+    downloadFile('CodePushPackage.kt', codePushPackageCode, 'text/x-kotlin');
+  };
+
   const githubWorkflowYaml = `name: 🚀 CodePush Enterprise Auto-Release
 
 on:
@@ -310,6 +323,8 @@ jobs:
     setTimeout(handleDownloadPushNotificationService, 400);
     setTimeout(handleDownloadAndroidManifest, 600);
     setTimeout(handleDownloadIndexJs, 800);
+    setTimeout(handleDownloadCodePushNativeModule, 1000);
+    setTimeout(handleDownloadCodePushPackage, 1200);
   };
 
   const installCmds = {
@@ -1239,6 +1254,55 @@ jobs:
                     </div>
                   </div>
                 </div>
+
+                {/* File 6: CodePush Native Module & Dynamic Bundle Loader */}
+                <div className={`p-4 rounded-2xl border flex flex-col gap-3 ${subCardBgClass}`}>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-start space-x-3 min-w-0">
+                      <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/25 text-cyan-400 shrink-0">
+                        <Cpu className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0 space-y-0.5">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-mono text-sm font-bold text-white">CodePush Native Bundle Loader</span>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                            Silent OTA & Reboot
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400">
+                          Target: <span className="font-mono text-slate-300">android/app/src/main/java/.../MainApplication.kt</span>
+                        </p>
+                        <p className="text-[11px] text-slate-400">
+                          Enables silent background OTA bundle downloading, file extraction into internal storage, and seamless automatic app reload.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-2 shrink-0 self-end sm:self-center">
+                      <button
+                        type="button"
+                        onClick={handleDownloadCodePushNativeModule}
+                        className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition-all shadow-md shadow-cyan-500/20 active:scale-95 cursor-pointer"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        <span>Module.kt</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleDownloadCodePushPackage}
+                        className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-cyan-700 hover:bg-cyan-600 text-white font-bold text-xs transition-all shadow-md shadow-cyan-600/20 active:scale-95 cursor-pointer"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        <span>Package.kt</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl bg-slate-950 border border-slate-800/80 p-3 font-mono text-[11px] text-cyan-300 overflow-x-auto max-h-48">
+                    <pre className="whitespace-pre-wrap">{mainApplicationSnippet}</pre>
+                  </div>
+                </div>
               </div>
 
               {/* Instructions Card */}
@@ -1251,6 +1315,7 @@ jobs:
                   <li>In your <code className="text-white font-mono">android/app/src/main/AndroidManifest.xml</code>, paste the permissions block inside the <code className="text-emerald-400 font-mono">&lt;manifest&gt;</code> tag.</li>
                   <li>Replace your root <code className="text-white font-mono">index.js</code> with the background-enabled template to handle push notifications when the app is closed.</li>
                   <li>Download <code className="text-amber-400 font-mono">google-services.json</code> from Firebase Console and add the Gradle plugins to enable FCM device tokens.</li>
+                  <li>Add <code className="text-cyan-400 font-mono">CodePushNativeModule.kt</code> & <code className="text-cyan-400 font-mono">CodePushPackage.kt</code> to your Android package, and hook <code className="text-cyan-300 font-mono">jsBundleFilePath</code> in <code className="text-white font-mono">MainApplication.kt</code>.</li>
                 </ol>
               </div>
 
