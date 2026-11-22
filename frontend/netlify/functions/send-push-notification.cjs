@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const admin = require('firebase-admin');
+const db = require('./db.cjs');
 const { getReleaseData, setReleaseData } = require('./store.cjs');
 const { extractApiKey, verifyApiKey } = require('./auth.cjs');
 
@@ -58,12 +59,19 @@ function initFirebaseAdmin() {
 
   if (serviceAccount) {
     try {
-      const app = admin.initializeApp({
-        credential: admin.cert ? admin.cert(serviceAccount) : admin.credential.cert(serviceAccount),
-      });
+      let credential;
+      if (admin.cert) {
+        credential = admin.cert(serviceAccount);
+      } else if (admin.credential && admin.credential.cert) {
+        credential = admin.credential.cert(serviceAccount);
+      } else {
+        const { cert } = require('firebase-admin/app');
+        credential = cert(serviceAccount);
+      }
+      const app = admin.initializeApp({ credential });
       return app;
     } catch (err) {
-      // silent
+      console.warn('[Firebase Admin Init] Error:', err.message);
     }
   }
 
@@ -116,13 +124,23 @@ exports.handler = async (event) => {
 
     // DELETE to clear push queue
     if (event.httpMethod === 'DELETE') {
-      const projectId = effectiveProjectId;
+      const projectId = effectiveProjectId !== 'default' ? effectiveProjectId : null;
+      try {
+        if (projectId) {
+          await db.query(
+            'UPDATE codepush_schema.push_notifications SET active = false WHERE project_id = $1',
+            [projectId]
+          );
+        } else {
+          await db.query('UPDATE codepush_schema.push_notifications SET active = false');
+        }
+      } catch (err) {}
+
       if (projectId && store.pushNotifications[projectId]) {
         delete store.pushNotifications[projectId];
       } else {
         store.pushNotifications = {};
       }
-      await setReleaseData(store);
       return {
         statusCode: 200,
         headers,
@@ -132,10 +150,44 @@ exports.handler = async (event) => {
 
     // GET to check active push notifications
     if (event.httpMethod === 'GET') {
-      const projectId = effectiveProjectId;
-      const push = (projectId && store.pushNotifications[projectId]) ||
-                    store.pushNotifications.latest ||
-                    null;
+      const projectId = effectiveProjectId !== 'default' ? effectiveProjectId : null;
+      let push = null;
+      try {
+        const res = await db.query(
+          `SELECT * FROM codepush_schema.push_notifications 
+           WHERE (project_id = $1 OR project_id IS NULL) 
+             AND active = true 
+           ORDER BY created_at DESC 
+           LIMIT 1`,
+          [projectId]
+        );
+        if (res.rows && res.rows.length > 0) {
+          const r = res.rows[0];
+          push = {
+            id: r.id,
+            projectId: r.project_id,
+            title: r.title,
+            body: r.body,
+            subtitle: r.subtitle,
+            imageUrl: r.image_url,
+            deepLink: r.deep_link,
+            soundTone: r.sound_tone,
+            platform: r.platform,
+            active: Boolean(r.active),
+            deliveryStatus: r.delivery_status,
+            createdAt: r.created_at,
+          };
+        }
+      } catch (err) {
+        console.warn('[PostgreSQL Push GET] Error:', err.message);
+      }
+
+      if (!push) {
+        push = (projectId && store.pushNotifications[projectId]) ||
+               store.pushNotifications.latest ||
+               null;
+      }
+
       return {
         statusCode: 200,
         headers,
@@ -251,6 +303,42 @@ exports.handler = async (event) => {
       } catch (fcmErr) {
         fcmErrorMessage = fcmErr.message;
       }
+    }
+
+    // Persist into PostgreSQL 'codepush_schema.push_notifications' table
+    try {
+      await db.query(
+        `INSERT INTO codepush_schema.push_notifications (
+           id, project_id, title, body, subtitle, image_url, deep_link,
+           sound_tone, platform, target, token, topic, priority,
+           active, delivery_status, created_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+         ON CONFLICT (id) DO UPDATE SET
+           title = EXCLUDED.title,
+           body = EXCLUDED.body,
+           active = EXCLUDED.active,
+           delivery_status = EXCLUDED.delivery_status;`,
+        [
+          newPush.id,
+          newPush.projectId,
+          newPush.title,
+          newPush.body,
+          newPush.subtitle,
+          newPush.imageUrl,
+          newPush.deepLink,
+          newPush.soundTone,
+          newPush.platform,
+          newPush.target,
+          newPush.token,
+          newPush.topic,
+          newPush.priority,
+          true,
+          fcmDispatchStatus,
+          newPush.createdAt,
+        ]
+      );
+    } catch (dbErr) {
+      console.warn('[PostgreSQL Push INSERT] Error:', dbErr.message);
     }
 
     // Save to Netlify store and update RTDB

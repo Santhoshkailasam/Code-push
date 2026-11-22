@@ -28,6 +28,7 @@ import {
 import type { Project } from '../../types';
 import { getCodePushServiceTemplate } from './templates/codePushServiceTemplate';
 import { getPushNotificationServiceTemplate } from './templates/pushNotificationServiceTemplate';
+import { getAndroidManifestTemplate, getAndroidManifestPermissionsSnippet } from './templates/androidManifestTemplate';
 
 interface IntegrationScreenProps {
   theme?: 'dark' | 'light';
@@ -128,6 +129,8 @@ export const IntegrationScreen: React.FC<IntegrationScreenProps> = ({
 
   const codePushServiceCode = getCodePushServiceTemplate(activeAppId, activeApiKey, activeAppName);
   const pushNotificationServiceCode = getPushNotificationServiceTemplate();
+  const androidManifestCode = getAndroidManifestTemplate(activeAppName);
+  const androidManifestSnippet = getAndroidManifestPermissionsSnippet();
 
   const handleDownloadCodePushService = () => {
     downloadFile('CodePushService.ts', codePushServiceCode, 'text/typescript');
@@ -135,6 +138,10 @@ export const IntegrationScreen: React.FC<IntegrationScreenProps> = ({
 
   const handleDownloadPushNotificationService = () => {
     downloadFile('PushNotificationService.ts', pushNotificationServiceCode, 'text/typescript');
+  };
+
+  const handleDownloadAndroidManifest = () => {
+    downloadFile('AndroidManifest.xml', androidManifestCode, 'application/xml');
   };
 
   const appTsxExampleCode = `import React, { useEffect } from 'react';
@@ -292,6 +299,7 @@ jobs:
     handleDownloadCodepushJson();
     setTimeout(handleDownloadCodePushService, 250);
     setTimeout(handleDownloadPushNotificationService, 500);
+    setTimeout(handleDownloadAndroidManifest, 750);
   };
 
   const installCmds = {
@@ -329,7 +337,7 @@ jobs:
     { id: 0, label: 'Overview', subtitle: 'Project credentials', icon: BookOpen },
     { id: 1, label: 'Dependencies', subtitle: 'npm packages', icon: Terminal, key: 'step1' },
     { id: 2, label: 'Config File', subtitle: 'codepush.json', icon: FileCode2, key: 'step2' },
-    { id: 3, label: 'Services', subtitle: 'Drop-in code', icon: Zap, key: 'step3' },
+    { id: 3, label: 'Services & Manifest', subtitle: 'Code & Permissions', icon: Zap, key: 'step3' },
     { id: 4, label: 'App.tsx', subtitle: 'Root hook', icon: Code2, key: 'step4' },
     { id: 5, label: 'CI/CD YAML', subtitle: 'codepush-release.yml', icon: GitBranch, key: 'step5' },
   ];
@@ -844,7 +852,7 @@ jobs:
           )}
 
           {/* ---------------------------------------------------- */}
-          {/* STEP 3: DROP IN CLIENT SERVICES */}
+          {/* STEP 3: DROP IN CLIENT SERVICES & ANDROID MANIFEST */}
           {/* ---------------------------------------------------- */}
           {currentStep === 3 && (
             <div className={`p-5 sm:p-6 rounded-3xl border space-y-5 ${cardBgClass} animate-fade-in`}>
@@ -853,9 +861,9 @@ jobs:
                   <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400">
                     Step 3 of 5
                   </span>
-                  <h2 className="text-xl font-black tracking-tight">Add Client Services</h2>
+                  <h2 className="text-xl font-black tracking-tight">Add Services & Android Manifest</h2>
                   <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                    Save both services into <code className="text-cyan-400 font-mono">src/services/</code>.
+                    Save both services into <code className="text-cyan-400 font-mono">src/services/</code> and update <code className="text-cyan-400 font-mono">AndroidManifest.xml</code>.
                   </p>
                 </div>
 
@@ -873,7 +881,7 @@ jobs:
                 </button>
               </div>
 
-              {/* Both Service Files as Clean Cards */}
+              {/* Service & Manifest Files as Clean Cards */}
               <div className="space-y-3">
                 {/* File 1: CodePushService.ts */}
                 <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${subCardBgClass}`}>
@@ -978,6 +986,65 @@ jobs:
                     </button>
                   </div>
                 </div>
+
+                {/* File 3: AndroidManifest.xml Permissions */}
+                <div className={`p-4 rounded-2xl border flex flex-col gap-3 ${subCardBgClass}`}>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-start space-x-3 min-w-0">
+                      <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 shrink-0">
+                        <Smartphone className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0 space-y-0.5">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-mono text-sm font-bold text-white">AndroidManifest.xml</span>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                            Android 13+ Permissions
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400">
+                          Configure in: <span className="font-mono text-slate-300">android/app/src/main/AndroidManifest.xml</span>
+                        </p>
+                        <p className="text-[11px] text-slate-400">
+                          Critical: Android 13+ requires <code className="text-emerald-400 font-mono">POST_NOTIFICATIONS</code> to display push alerts in notification shade.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-2 shrink-0 self-end sm:self-center">
+                      <button
+                        type="button"
+                        onClick={handleDownloadAndroidManifest}
+                        className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        <span>Download XML</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(androidManifestSnippet, 'manifest_snippet')}
+                        className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold text-xs transition-all cursor-pointer"
+                      >
+                        {copiedKey === 'manifest_snippet' ? (
+                          <>
+                            <Check className="h-3.5 w-3.5 text-emerald-400" />
+                            <span className="text-emerald-400">Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3.5 w-3.5 text-slate-400" />
+                            <span>Copy Permissions</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Embedded Code Snippet Box */}
+                  <div className="rounded-xl bg-slate-950 border border-slate-800/80 p-3 font-mono text-[11px] text-emerald-300 overflow-x-auto">
+                    <pre className="whitespace-pre-wrap">{androidManifestSnippet}</pre>
+                  </div>
+                </div>
               </div>
 
               {/* Instructions Card */}
@@ -988,8 +1055,8 @@ jobs:
                 </h4>
                 <ol className="list-decimal list-inside space-y-1.5 text-xs text-slate-300 leading-relaxed">
                   <li>Create a directory named <code className="text-cyan-400 font-mono">src/services/</code> in your project.</li>
-                  <li>Click <strong className="text-white">Download</strong> on both files above and place them into <code className="text-cyan-400 font-mono">src/services/</code>.</li>
-                  <li>Both services are pre-configured with your project credentials and ready to run immediately.</li>
+                  <li>Click <strong className="text-white">Download</strong> on both services above and place them into <code className="text-cyan-400 font-mono">src/services/</code>.</li>
+                  <li>In your <code className="text-white font-mono">android/app/src/main/AndroidManifest.xml</code>, paste the permissions block inside the <code className="text-emerald-400 font-mono">&lt;manifest&gt;</code> tag to enable Android 13+ push notifications, high-importance audio channels, and watchdog boot survival.</li>
                 </ol>
               </div>
 

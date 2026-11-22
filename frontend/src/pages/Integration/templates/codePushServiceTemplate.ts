@@ -258,6 +258,7 @@ export const CodePushService = {
   startLiveAlertListener(): () => void {
     const checkLiveAlert = async () => {
       try {
+        // 1. Primary: Dedicated send-alert endpoint backed by PostgreSQL
         const res = await fetch(CONFIG.serverUrl + '/.netlify/functions/send-alert?projectId=' + CONFIG.appId, {
           headers: {
             'x-codepush-api-key': CONFIG.apiKey,
@@ -266,12 +267,38 @@ export const CodePushService = {
         if (res.ok) {
           const data = await res.json();
           const alert = data.alert;
-          if (alert && alert.active && alert.message) displayAlertOnce(alert);
+          if (alert && alert.active && (alert.message || alert.alertMessage)) {
+            displayAlertOnce({
+              id: alert.id,
+              title: alert.title || alert.alertTitle || 'CodePush Alert',
+              message: alert.message || alert.alertMessage,
+              actionLabel: alert.actionLabel,
+              actionUrl: alert.actionUrl,
+              mandatory: alert.mandatory,
+            });
+            return;
+          }
+        }
+      } catch {}
+
+      // 2. Secondary fallback: check-update endpoint
+      try {
+        const res = await fetch(CONFIG.serverUrl + '/.netlify/functions/check-update?platform=android&currentVersion=1.0.0&appVersion=' + CONFIG.version, {
+          headers: {
+            'x-codepush-api-key': CONFIG.apiKey,
+          },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const alert = data.alert || (data.alertMessage ? { id: data.alertId, title: data.alertTitle, message: data.alertMessage, active: true } : null);
+          if (alert && alert.active && alert.message) {
+            displayAlertOnce(alert);
+          }
         }
       } catch {}
     };
     checkLiveAlert();
-    const interval = setInterval(checkLiveAlert, 8000);
+    const interval = setInterval(checkLiveAlert, 2000);
     return () => clearInterval(interval);
   },
 
@@ -287,27 +314,40 @@ export const CodePushService = {
         });
         if (res.ok) {
           const data = await res.json();
-          const push = data.notification;
-          if (push && push.active && (push.title || push.body)) {
-            const id = push.id || push.body || 'default';
+          // Support all server response schemas: pushNotification, notification, push, or latest in all[]
+          const push =
+            data.pushNotification ||
+            data.notification ||
+            data.push ||
+            data.data?.pushNotification ||
+            (Array.isArray(data.all) && data.all.length > 0 ? data.all[data.all.length - 1] : null);
+
+          if (push && push.active !== false && (push.title || push.body)) {
+            const id =
+              push.id ||
+              (push.timestamp ? 'push_' + push.timestamp : null) ||
+              (push.sentAt ? 'push_' + push.sentAt : null) ||
+              (push.createdAt ? 'push_' + new Date(push.createdAt).getTime() : null) ||
+              (push.title || '') + ':::' + (push.body || '');
+
             if (!shownPushIds.has(id)) {
               shownPushIds.add(id);
               try {
                 let displayed = false;
-                if (typeof require !== 'undefined') {
-                  try {
-                    const PushService = require('./PushNotificationService')?.PushNotificationService;
-                    if (PushService && typeof PushService.displayNativePush === 'function') {
-                      PushService.displayNativePush({
-                        title: push.title,
-                        body: push.body,
-                        soundTone: push.soundTone,
-                        route: push.deepLink,
-                        data: { route: push.deepLink, soundTone: push.soundTone, pushId: id },
-                      });
-                      displayed = true;
-                    }
-                  } catch {}
+                try {
+                  const PushService = require('./PushNotificationService')?.PushNotificationService;
+                  if (PushService && typeof PushService.displayNativePush === 'function') {
+                    await PushService.displayNativePush({
+                      title: push.title,
+                      body: push.body,
+                      soundTone: push.soundTone,
+                      route: push.deepLink || push.route,
+                      data: { route: push.deepLink || push.route, soundTone: push.soundTone, pushId: id },
+                    });
+                    displayed = true;
+                  }
+                } catch (pushErr) {
+                  console.warn('⚠️ [CodePush] displayNativePush call failed:', pushErr);
                 }
                 if (!displayed) {
                   Alert.alert(push.title || 'Push Notification', push.body || '');
@@ -321,7 +361,7 @@ export const CodePushService = {
       } catch {}
     };
     checkLivePush();
-    const interval = setInterval(checkLivePush, 8000);
+    const interval = setInterval(checkLivePush, 2000);
     return () => clearInterval(interval);
   },
 

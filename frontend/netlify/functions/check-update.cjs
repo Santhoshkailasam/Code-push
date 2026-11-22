@@ -475,6 +475,7 @@ exports.handler = async (event) => {
       assetManifest: targetRelease.assetManifest || null,
       // Device & Geo Context (Feature 7 & 8)
       country: clientCountry,
+      alert: activeAlert,
       alertMessage: activeAlert ? activeAlert.message : null,
       alertTitle: activeAlert ? activeAlert.title || 'CodePush Alert Testing' : null,
       alertId: activeAlert ? activeAlert.id : null,
