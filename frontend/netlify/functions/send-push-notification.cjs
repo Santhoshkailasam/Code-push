@@ -176,6 +176,7 @@ exports.handler = async (event) => {
             active: Boolean(r.active),
             deliveryStatus: r.delivery_status,
             createdAt: r.created_at,
+            created_at: r.created_at,
           };
         }
       } catch (err) {

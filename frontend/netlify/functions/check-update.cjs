@@ -405,6 +405,7 @@ exports.handler = async (event) => {
           soundTone: row.sound_tone || 'default',
           active: true,
           createdAt: row.created_at,
+          created_at: row.created_at,
         };
       }
     }

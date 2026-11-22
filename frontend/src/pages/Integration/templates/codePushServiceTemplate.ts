@@ -5,6 +5,7 @@ export function getCodePushServiceTemplate(
 ): string {
   return `// src/services/CodePushService.ts
 import { Platform, Alert, NativeModules } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { CodePushNative } = NativeModules;
 declare const require: any;
@@ -38,8 +39,40 @@ export interface UpdateResponse {
 let cachedRemoteConfig: Record<string, any> = {};
 let bootWatchdogPassed = false;
 let bootCrashCount = 0;
-const shownAlertIds = new Set<string>();
 const appSessionStartTime = Date.now();
+const shownAlertIds = new Set<string>();
+const shownPushIds = new Set<string>();
+let isStorageLoaded = false;
+
+async function ensureStorageLoaded(): Promise<void> {
+  if (isStorageLoaded) return;
+  try {
+    const [storedAlerts, storedPushes] = await Promise.all([
+      AsyncStorage.getItem('@codepush_shown_alerts'),
+      AsyncStorage.getItem('@codepush_shown_pushes'),
+    ]);
+    if (storedAlerts) JSON.parse(storedAlerts).forEach((id: string) => shownAlertIds.add(id));
+    if (storedPushes) JSON.parse(storedPushes).forEach((id: string) => shownPushIds.add(id));
+    isStorageLoaded = true;
+  } catch {}
+}
+ensureStorageLoaded();
+
+async function markAlertShown(id: string): Promise<void> {
+  await ensureStorageLoaded();
+  shownAlertIds.add(id);
+  try {
+    await AsyncStorage.setItem('@codepush_shown_alerts', JSON.stringify(Array.from(shownAlertIds).slice(-100)));
+  } catch {}
+}
+
+async function markPushShown(id: string): Promise<void> {
+  await ensureStorageLoaded();
+  shownPushIds.add(id);
+  try {
+    await AsyncStorage.setItem('@codepush_shown_pushes', JSON.stringify(Array.from(shownPushIds).slice(-100)));
+  } catch {}
+}
 
 // 1. Auto-report crashes to CodePush server
 export async function reportCrashToServer(error: { message: string; stack?: string; version?: string }): Promise<void> {
@@ -75,7 +108,7 @@ if (globalScope.ErrorUtils) {
   });
 }
 
-function displayAlertOnce(alert: {
+async function displayAlertOnce(alert: {
   id?: string;
   title?: string;
   message?: string;
@@ -84,21 +117,24 @@ function displayAlertOnce(alert: {
   actionUrl?: string;
   mandatory?: boolean;
   createdAt?: string | number;
-}): void {
+  created_at?: string | number;
+}): Promise<void> {
   if (!alert || !alert.message) return;
-  const id = alert.id || alert.message;
+  await ensureStorageLoaded();
+  const id = alert.id || `${alert.title || ''}:::${alert.message}`;
   if (shownAlertIds.has(id)) return;
 
   // Stale alert check: do not show past alerts on app startup
-  if (alert.createdAt) {
-    const alertTime = new Date(alert.createdAt).getTime();
-    if (!isNaN(alertTime) && alertTime < appSessionStartTime - 8000) {
-      shownAlertIds.add(id);
+  const rawTime = alert.createdAt || alert.created_at;
+  if (rawTime) {
+    const alertTime = new Date(rawTime).getTime();
+    if (!isNaN(alertTime) && alertTime < appSessionStartTime - 2000) {
+      await markAlertShown(id);
       return;
     }
   }
 
-  shownAlertIds.add(id);
+  await markAlertShown(id);
   Alert.alert(alert.title || 'CodePush Alert', alert.message, [{ text: 'OK' }]);
 }
 
@@ -366,13 +402,13 @@ export const CodePushService = {
               : 0;
 
             // Stale push check: Ignore pushes that were sent before this app session started
-            if (pushTime > 0 && pushTime < appSessionStartTime - 8000) {
-              shownPushIds.add(id);
+            if (pushTime > 0 && pushTime < appSessionStartTime - 2000) {
+              await markPushShown(id);
               return;
             }
 
             if (!shownPushIds.has(id)) {
-              shownPushIds.add(id);
+              await markPushShown(id);
               try {
                 let displayed = false;
                 try {

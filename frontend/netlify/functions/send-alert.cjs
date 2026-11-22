@@ -61,7 +61,17 @@ exports.handler = async (event) => {
          LIMIT 10`,
         [projectId]
       );
-      const activeAlert = alertRes.rows.length > 0 ? alertRes.rows[0] : null;
+      const activeAlert = alertRes.rows.length > 0 ? {
+        id: alertRes.rows[0].id,
+        projectId: alertRes.rows[0].project_id,
+        title: alertRes.rows[0].title,
+        message: alertRes.rows[0].message,
+        type: alertRes.rows[0].type,
+        active: Boolean(alertRes.rows[0].active),
+        soundTone: alertRes.rows[0].sound_tone,
+        createdAt: alertRes.rows[0].created_at,
+        created_at: alertRes.rows[0].created_at,
+      } : null;
       return {
         statusCode: 200,
         headers,
