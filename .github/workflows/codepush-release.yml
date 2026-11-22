@@ -19,42 +19,38 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
       - name: 📦 Install dependencies
-        run: npm ci --prefer-offline
+        working-directory: ./frontend
+        run: npm install --prefer-offline
 
       - name: ⚙️ Generate Version Metadata & Compute Commit Hash
         id: vars
         run: |
           VERSION="1.1.$(date +'%Y%m%d%H%M')"
           COMMIT_SHA=$(git rev-parse --short HEAD)
-          COMMIT_MSG=$(git log -1 --pretty=%B)
+          COMMIT_MSG=$(git log -1 --pretty=%B | head -n 1)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
           echo "commit_msg=$COMMIT_MSG" >> $GITHUB_OUTPUT
 
-      - name: 🔨 Build React Native / Web Mobile Bundle
+      - name: 🔨 Build Frontend Dashboard & Assets
+        working-directory: ./frontend
         run: |
-          mkdir -p build_output
-          # Build bundle or dist package
-          if npm run | grep -q "build"; then
-            npm run build
-          fi
+          npm run build
 
       - name: 🚀 Publish Release to CodePush Server & Mobile Devices
+        working-directory: ./frontend
         run: |
           node bin/codepush.mjs release-react \
-            --app "${{ secrets.CODEPUSH_APP_ID || 'app_rCYp1a_mvdfs5j4_w9dyc' }}" \
-            --key "${{ secrets.CODEPUSH_API_KEY || 'cp_live_sec_key_demo_2026' }}" \
+            --app "${{ secrets.CODEPUSH_APP_ID || 'app_rCYp1a_mwrdt1u4_ln97h' }}" \
+            --key "${{ secrets.CODEPUSH_API_KEY || 'cp_live_rCYp1a_mwrdt8my_d3d3yi' }}" \
             --platform android \
             --version "${{ steps.vars.outputs.version }}" \
             --track production \
             --rollout 100 \
-            --canary 30 \
             --mandatory \
-            --notes "CI/CD: ${{ steps.vars.outputs.commit_msg }}" \
-            --webhook "${{ secrets.CODEPUSH_WEBHOOK_URL || '' }}"
+            --notes "CI/CD: ${{ steps.vars.outputs.commit_msg }}"
 
       - name: ✅ Verification & Status Report
         run: |
