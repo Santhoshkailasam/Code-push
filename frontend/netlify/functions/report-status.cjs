@@ -80,6 +80,15 @@ exports.handler = async (event) => {
       [pingId, effectiveProjectId, plat, dev, country, 'UTC', act, ver]
     );
 
+    if (payload.fcmToken && typeof payload.fcmToken === 'string' && payload.fcmToken.trim().length > 10) {
+      await db.query(
+        `INSERT INTO codepush_schema.device_tokens (token, project_id, platform, updated_at)
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (token) DO UPDATE SET updated_at = NOW(), project_id = EXCLUDED.project_id`,
+        [payload.fcmToken.trim(), effectiveProjectId, plat]
+      ).catch(() => {});
+    }
+
     const newPing = {
       id: pingId,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),

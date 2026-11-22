@@ -78,8 +78,22 @@ function initFirebaseAdmin() {
   return null;
 }
 
-// Helper to fetch the latest device token
-async function fetchLatestDeviceToken() {
+// Helper to fetch the latest device token from PostgreSQL
+async function fetchLatestDeviceToken(projectId) {
+  try {
+    const res = await db.query(
+      `SELECT token FROM codepush_schema.device_tokens
+       WHERE ($1::text IS NULL OR project_id = $1)
+       ORDER BY updated_at DESC
+       LIMIT 1`,
+      [projectId || null]
+    );
+    if (res.rows && res.rows.length > 0) {
+      return res.rows[0].token;
+    }
+  } catch (err) {
+    console.warn('[Fetch Device Token Error]:', err.message);
+  }
   return null;
 }
 
@@ -239,9 +253,9 @@ exports.handler = async (event) => {
 
     let targetToken = token ? token.trim() : null;
 
-    // Auto-resolve device token from RTDB if not explicitly passed or if demo placeholder
-    if ((!targetToken || targetToken.startsWith('fcm_token_demo_')) && target !== 'topic') {
-      const realToken = await fetchLatestDeviceToken();
+    // Auto-resolve device token from PostgreSQL if not explicitly passed or if demo placeholder
+    if (!targetToken || targetToken.startsWith('fcm_token_demo_')) {
+      const realToken = await fetchLatestDeviceToken(effectiveProjectId || payload.projectId);
       if (realToken) {
         targetToken = realToken;
       }
@@ -251,7 +265,7 @@ exports.handler = async (event) => {
       id: pushId,
       title: title || 'CodePush Notification',
       body: body || 'Test push notification',
-      subtitle: subtitle || 'SkillSwap',
+      subtitle: subtitle || 'Ghost API',
       imageUrl: imageUrl || null,
       deepLink: deepLink || null,
       platform: platform || 'all',
@@ -273,36 +287,73 @@ exports.handler = async (event) => {
 
     // ⚡ DISPATCH DIRECTLY TO GOOGLE FCM v1 SERVERS
     const firebaseApp = initFirebaseAdmin();
-    if (firebaseApp && targetToken && !targetToken.startsWith('fcm_token_demo_')) {
+    if (firebaseApp) {
       try {
         const { getMessaging } = require('firebase-admin/messaging');
         const messaging = getMessaging(firebaseApp);
 
-        // 🛡️ Data-only high-priority payload:
-        // Android OS automatically creates a notification if the `notification` key is present.
-        // Sending data-only ensures only Notifee inside the app creates the notification (1 time only).
-        const message = {
-          token: targetToken,
-          data: {
-            title: String(newPush.title || 'CodePush Notification'),
-            body: String(newPush.body || 'New message received'),
-            subtitle: String(newPush.subtitle || 'SkillSwap'),
-            imageUrl: String(newPush.imageUrl || ''),
-            route: String(newPush.deepLink || ''),
-            soundTone: String(cleanTone),
-            pushId: String(newPush.id),
-            projectId: String(newPush.projectId || ''),
-          },
-          android: {
-            priority: 'high', // ⚡ Wakes up killed/closed mobile devices immediately
+        const dataPayload = {
+          title: String(newPush.title || 'CodePush Notification'),
+          body: String(newPush.body || 'New message received'),
+          subtitle: String(newPush.subtitle || 'Ghost API'),
+          imageUrl: String(newPush.imageUrl || ''),
+          route: String(newPush.deepLink || ''),
+          soundTone: String(cleanTone),
+          pushId: String(newPush.id),
+          projectId: String(newPush.projectId || ''),
+        };
+
+        const notificationPayload = {
+          title: String(newPush.title || 'CodePush Notification'),
+          body: String(newPush.body || 'New message received'),
+        };
+
+        const androidConfig = {
+          priority: 'high',
+          notification: {
+            channelId: channelId,
+            icon: 'ic_notification',
+            color: '#0284c7',
+            sound: cleanTone !== 'default' && cleanTone !== 'silent' ? cleanTone : 'default',
+            defaultSound: cleanTone === 'default',
           },
         };
 
-        const fcmResponse = await messaging.send(message);
-        fcmMessageId = fcmResponse;
-        fcmDispatchStatus = 'DELIVERED_VIA_FCM_V1';
+        // 1. Direct device token delivery if token is present
+        if (targetToken && !targetToken.startsWith('fcm_token_demo_')) {
+          try {
+            const message = {
+              token: targetToken,
+              data: dataPayload,
+              notification: notificationPayload,
+              android: androidConfig,
+            };
+            const fcmResponse = await messaging.send(message);
+            fcmMessageId = fcmResponse;
+            fcmDispatchStatus = 'DELIVERED_VIA_FCM_V1';
+          } catch (tokErr) {
+            console.warn('[FCM Token Send Error]:', tokErr.message);
+          }
+        }
+
+        // 2. Broadcast to FCM topic for topic or 'all' target
+        const topicName = newPush.topic || (effectiveProjectId ? `app_${effectiveProjectId}` : 'all');
+        try {
+          const topicMessage = {
+            topic: topicName,
+            data: dataPayload,
+            notification: notificationPayload,
+            android: androidConfig,
+          };
+          const topicResp = await messaging.send(topicMessage);
+          if (!fcmMessageId) fcmMessageId = topicResp;
+          fcmDispatchStatus = 'DELIVERED_VIA_FCM_V1';
+        } catch (topErr) {
+          console.warn('[FCM Topic Send Error]:', topErr.message);
+        }
       } catch (fcmErr) {
         fcmErrorMessage = fcmErr.message;
+        console.warn('[FCM Send Exception]:', fcmErr.message);
       }
     }
 
