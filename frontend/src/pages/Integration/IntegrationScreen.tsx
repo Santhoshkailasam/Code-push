@@ -637,7 +637,7 @@ jobs:
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-400">
-                    Step 1 of 5
+                    Step 1 of 6
                   </span>
                   <h2 className="text-xl font-black tracking-tight">Install Dependencies</h2>
                   <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
@@ -740,7 +740,7 @@ jobs:
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400">
-                    Step 2 of 5
+                    Step 2 of 6
                   </span>
                   <h2 className="text-xl font-black tracking-tight">Add Config File</h2>
                   <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
@@ -1280,7 +1280,7 @@ jobs:
           {/* ---------------------------------------------------- */}
           {/* STEP 5: INITIALIZE IN APP.TSX */}
           {/* ---------------------------------------------------- */}
-          {currentStep === 6 && (
+          {currentStep === 5 && (
             <div className={`p-5 sm:p-6 rounded-3xl border space-y-5 ${cardBgClass} animate-fade-in`}>
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
@@ -1295,15 +1295,15 @@ jobs:
 
                 <button
                   type="button"
-                  onClick={() => toggleChecklist('step6')}
+                  onClick={() => toggleChecklist('step5')}
                   className={`flex items-center space-x-1 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    checklist.step6
+                    checklist.step5
                       ? 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-400'
                       : 'bg-slate-800/80 hover:bg-slate-700 text-slate-400 border border-slate-700'
                   }`}
                 >
-                  {checklist.step4 ? <Check className="h-3.5 w-3.5" /> : <div className="h-3 w-3 rounded border border-slate-500" />}
-                  <span>{checklist.step4 ? 'Done' : 'Mark Done'}</span>
+                  {checklist.step5 ? <Check className="h-3.5 w-3.5" /> : <div className="h-3 w-3 rounded border border-slate-500" />}
+                  <span>{checklist.step5 ? 'Done' : 'Mark Done'}</span>
                 </button>
               </div>
 
@@ -1404,7 +1404,7 @@ jobs:
           {/* ---------------------------------------------------- */}
           {/* STEP 6: CI/CD AUTOMATION (codepush-release.yml) */}
           {/* ---------------------------------------------------- */}
-          {currentStep === 5 && (
+          {currentStep === 6 && (
             <div className={`p-5 sm:p-6 rounded-3xl border space-y-5 ${cardBgClass} animate-fade-in`}>
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
@@ -1419,15 +1419,15 @@ jobs:
 
                 <button
                   type="button"
-                  onClick={() => toggleChecklist('step5')}
+                  onClick={() => toggleChecklist('step6')}
                   className={`flex items-center space-x-1 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    checklist.step5
+                    checklist.step6
                       ? 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-400'
                       : 'bg-slate-800/80 hover:bg-slate-700 text-slate-400 border border-slate-700'
                   }`}
                 >
-                  {checklist.step5 ? <Check className="h-3.5 w-3.5" /> : <div className="h-3 w-3 rounded border border-slate-500" />}
-                  <span>{checklist.step5 ? 'Done' : 'Mark Done'}</span>
+                  {checklist.step6 ? <Check className="h-3.5 w-3.5" /> : <div className="h-3 w-3 rounded border border-slate-500" />}
+                  <span>{checklist.step6 ? 'Done' : 'Mark Done'}</span>
                 </button>
               </div>
 
