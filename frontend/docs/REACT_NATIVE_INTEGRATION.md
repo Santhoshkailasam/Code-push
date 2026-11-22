@@ -307,8 +307,7 @@ export const CodePushService = {
       const response = await fetch(`${CONFIG.serverUrl}/.netlify/functions/check-update?${queryParams.toString()}`, {
         headers: {
           'x-codepush-api-key': CONFIG.apiKey,
-          'Connection': 'keep-alive',
-          'Accept-Encoding': 'gzip, br',
+          'Accept': 'application/json',
         },
       });
 

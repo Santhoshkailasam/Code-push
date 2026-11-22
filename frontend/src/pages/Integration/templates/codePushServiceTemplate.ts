@@ -39,6 +39,7 @@ let cachedRemoteConfig: Record<string, any> = {};
 let bootWatchdogPassed = false;
 let bootCrashCount = 0;
 const shownAlertIds = new Set<string>();
+const appSessionStartTime = Date.now();
 
 // 1. Auto-report crashes to CodePush server
 export async function reportCrashToServer(error: { message: string; stack?: string; version?: string }): Promise<void> {
@@ -82,10 +83,21 @@ function displayAlertOnce(alert: {
   actionLabel?: string;
   actionUrl?: string;
   mandatory?: boolean;
+  createdAt?: string | number;
 }): void {
   if (!alert || !alert.message) return;
   const id = alert.id || alert.message;
   if (shownAlertIds.has(id)) return;
+
+  // Stale alert check: do not show past alerts on app startup
+  if (alert.createdAt) {
+    const alertTime = new Date(alert.createdAt).getTime();
+    if (!isNaN(alertTime) && alertTime < appSessionStartTime - 8000) {
+      shownAlertIds.add(id);
+      return;
+    }
+  }
+
   shownAlertIds.add(id);
   Alert.alert(alert.title || 'CodePush Alert', alert.message, [{ text: 'OK' }]);
 }
@@ -176,10 +188,9 @@ export const CodePushService = {
       const response = await fetch(CONFIG.serverUrl + '/.netlify/functions/check-update?' + queryParams.toString(), {
         headers: {
           'x-codepush-api-key': CONFIG.apiKey,
-          'Connection': 'keep-alive',
-          'Accept-Encoding': 'gzip, br',
+          'Accept': 'application/json',
         },
-        signal: typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined,
+        signal: typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined,
       });
 
       if (!response.ok) return;
@@ -196,9 +207,15 @@ export const CodePushService = {
         return;
       }
 
-      // In-App Alert
+      // In-App Alert (Only display if freshly broadcast)
       if (data.alertMessage) {
-        displayAlertOnce({ id: data.alertId, title: data.alertTitle, message: data.alertMessage, active: true });
+        displayAlertOnce({
+          id: data.alertId,
+          title: data.alertTitle,
+          message: data.alertMessage,
+          active: true,
+          createdAt: (data as any).alert?.createdAt,
+        });
       }
 
       // Silent Over-The-Air Install
@@ -283,6 +300,7 @@ export const CodePushService = {
               actionLabel: alert.actionLabel,
               actionUrl: alert.actionUrl,
               mandatory: alert.mandatory,
+              createdAt: alert.createdAt,
             });
             return;
           }
@@ -294,11 +312,12 @@ export const CodePushService = {
         const res = await fetch(CONFIG.serverUrl + '/.netlify/functions/check-update?platform=android&currentVersion=1.0.0&appVersion=' + CONFIG.version, {
           headers: {
             'x-codepush-api-key': CONFIG.apiKey,
+            'Accept': 'application/json',
           },
         });
         if (res.ok) {
           const data = await res.json();
-          const alert = data.alert || (data.alertMessage ? { id: data.alertId, title: data.alertTitle, message: data.alertMessage, active: true } : null);
+          const alert = data.alert || (data.alertMessage ? { id: data.alertId, title: data.alertTitle, message: data.alertMessage, active: true, createdAt: (data as any).alert?.createdAt } : null);
           if (alert && alert.active && alert.message) {
             displayAlertOnce(alert);
           }
@@ -337,6 +356,20 @@ export const CodePushService = {
               (push.sentAt ? 'push_' + push.sentAt : null) ||
               (push.createdAt ? 'push_' + new Date(push.createdAt).getTime() : null) ||
               (push.title || '') + ':::' + (push.body || '');
+
+            const pushTime = push.createdAt
+              ? new Date(push.createdAt).getTime()
+              : push.timestamp
+              ? Number(push.timestamp)
+              : push.sentAt
+              ? new Date(push.sentAt).getTime()
+              : 0;
+
+            // Stale push check: Ignore pushes that were sent before this app session started
+            if (pushTime > 0 && pushTime < appSessionStartTime - 8000) {
+              shownPushIds.add(id);
+              return;
+            }
 
             if (!shownPushIds.has(id)) {
               shownPushIds.add(id);
