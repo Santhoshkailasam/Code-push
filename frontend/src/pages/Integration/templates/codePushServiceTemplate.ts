@@ -74,7 +74,15 @@ if (globalScope.ErrorUtils) {
   });
 }
 
-function displayAlertOnce(alert: { id?: string; title?: string; message?: string; active?: boolean }): void {
+function displayAlertOnce(alert: {
+  id?: string;
+  title?: string;
+  message?: string;
+  active?: boolean;
+  actionLabel?: string;
+  actionUrl?: string;
+  mandatory?: boolean;
+}): void {
   if (!alert || !alert.message) return;
   const id = alert.id || alert.message;
   if (shownAlertIds.has(id)) return;

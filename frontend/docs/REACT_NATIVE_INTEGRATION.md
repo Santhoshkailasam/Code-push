@@ -416,17 +416,48 @@ export const CodePushService = {
    */
   startLiveAlertListener(): () => void {
     const checkLiveAlert = async () => {
+      // 1. Primary: Query dedicated alert endpoint
       try {
-        const rtdbUrl = 'https://tracker-42b47-default-rtdb.asia-southeast1.firebasedatabase.app/codepush_releases/alerts';
-        const res = await fetch(`${rtdbUrl}/${CONFIG.appId}.json`);
+        const res = await fetch(CONFIG.serverUrl + '/.netlify/functions/send-alert?projectId=' + CONFIG.appId, {
+          headers: {
+            'x-codepush-api-key': CONFIG.apiKey,
+          },
+        });
         if (res.ok) {
           const data = await res.json();
-          if (data && data.active && data.message) displayAlertOnce(data);
+          const alert = data.alert;
+          if (alert && alert.active && (alert.message || alert.alertMessage)) {
+            displayAlertOnce({
+              id: alert.id,
+              title: alert.title || alert.alertTitle || 'CodePush Alert',
+              message: alert.message || alert.alertMessage,
+              actionLabel: alert.actionLabel,
+              actionUrl: alert.actionUrl,
+              mandatory: alert.mandatory,
+            });
+            return;
+          }
+        }
+      } catch {}
+
+      // 2. Secondary fallback: check-update endpoint
+      try {
+        const res = await fetch(CONFIG.serverUrl + '/.netlify/functions/check-update?platform=android&currentVersion=1.0.0&appVersion=' + CONFIG.version, {
+          headers: {
+            'x-codepush-api-key': CONFIG.apiKey,
+          },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const alert = data.alert;
+          if (alert && alert.active && (alert.message || alert.alertMessage)) {
+            displayAlertOnce(alert);
+          }
         }
       } catch {}
     };
     checkLiveAlert();
-    const interval = setInterval(checkLiveAlert, 2500);
+    const interval = setInterval(checkLiveAlert, 2000);
     return () => clearInterval(interval);
   },
 
@@ -437,25 +468,54 @@ export const CodePushService = {
     const shownPushIds = new Set<string>();
     const checkLivePush = async () => {
       try {
-        const rtdbPushUrl = 'https://tracker-42b47-default-rtdb.asia-southeast1.firebasedatabase.app/codepush_releases/push_notifications';
-        const res = await fetch(`${rtdbPushUrl}/${CONFIG.appId}.json`);
+        const res = await fetch(CONFIG.serverUrl + '/.netlify/functions/send-push-notification?projectId=' + CONFIG.appId, {
+          headers: {
+            'x-codepush-api-key': CONFIG.apiKey,
+          },
+        });
         if (res.ok) {
-          const push = await res.json();
-          if (push && push.active && (push.title || push.body)) {
-            const id = push.id || push.body || 'default';
+          const data = await res.json();
+          // Support all server response schemas: pushNotification, notification, push, or latest in all[]
+          const push =
+            data.pushNotification ||
+            data.notification ||
+            data.push ||
+            data.data?.pushNotification ||
+            (Array.isArray(data.all) && data.all.length > 0 ? data.all[data.all.length - 1] : null);
+
+          if (push && push.active !== false && (push.title || push.body)) {
+            const id =
+              push.id ||
+              (push.timestamp ? `push_${push.timestamp}` : null) ||
+              (push.sentAt ? `push_${push.sentAt}` : null) ||
+              (push.createdAt ? `push_${new Date(push.createdAt).getTime()}` : null) ||
+              `${push.title || ''}:::${push.body || ''}`;
+
             if (!shownPushIds.has(id)) {
               shownPushIds.add(id);
               try {
-                const { PushNotificationService } = require('./PushNotificationService');
-                PushNotificationService.displayNativePush({
-                  title: push.title,
-                  body: push.body,
-                  soundTone: push.soundTone,
-                  route: push.deepLink,
-                  data: { route: push.deepLink, soundTone: push.soundTone, pushId: id },
-                });
-              } catch {
-                Alert.alert(push.title || 'Push Notification', push.body || '');
+                let displayed = false;
+                try {
+                  const PushService = require('./PushNotificationService')?.PushNotificationService;
+                  if (PushService && typeof PushService.displayNativePush === 'function') {
+                    await PushService.displayNativePush({
+                      title: push.title,
+                      body: push.body,
+                      soundTone: push.soundTone,
+                      route: push.deepLink || push.route,
+                      data: { route: push.deepLink || push.route, soundTone: push.soundTone, pushId: id },
+                    });
+                    displayed = true;
+                  }
+                } catch (pushErr) {
+                  console.warn('⚠️ [CodePush] displayNativePush call failed:', pushErr);
+                }
+
+                if (!displayed) {
+                  Alert.alert(push.title || 'CodePush Notification', push.body || 'You have received a new update');
+                }
+              } catch (alertErr) {
+                console.warn('⚠️ [CodePush] Push alert display error:', alertErr);
               }
             }
           }
@@ -463,7 +523,7 @@ export const CodePushService = {
       } catch {}
     };
     checkLivePush();
-    const interval = setInterval(checkLivePush, 2500);
+    const interval = setInterval(checkLivePush, 2000);
     return () => clearInterval(interval);
   },
 };
@@ -473,7 +533,7 @@ export const CodePushService = {
 
 ## Step 4: Push Notification Service (`src/services/PushNotificationService.ts`)
 
-Create `src/services/PushNotificationService.ts` to manage high-priority FCM v1 push tokens, custom sound tone channels (`crystal_glass`, `electronic_pulse`, `subtle_pop`, `urgent_alarm`), and deep-link routing.
+Create `src/services/PushNotificationService.ts` to manage high-priority FCM v1 push tokens, dynamic Android notification channels, custom audio sound tones (`crystal_glass`, `electronic_pulse`, `subtle_pop`, `urgent_alarm`), and deep-link routing.
 
 ```typescript
 // src/services/PushNotificationService.ts
@@ -491,77 +551,103 @@ import { Linking, Platform } from 'react-native';
 const handledPushIds = new Set<string>();
 
 export const PushNotificationService = {
-  isPushAlreadyHandled(pushId?: string, title?: string, body?: string): boolean {
-    const key = pushId || `${title}_${body}`;
-    return handledPushIds.has(key);
+  fcmToken: '' as string,
+
+  isPushAlreadyHandled(id?: string | null, title?: string | null, body?: string | null): boolean {
+    if (id && handledPushIds.has(id)) return true;
+    return false;
   },
 
-  markPushHandled(pushId?: string, title?: string, body?: string): void {
-    const key = pushId || `${title}_${body}`;
-    handledPushIds.add(key);
+  markPushHandled(id?: string | null, title?: string | null, body?: string | null): void {
+    if (id) handledPushIds.add(id);
+    if (handledPushIds.size > 100) {
+      const first = handledPushIds.values().next().value;
+      if (first) handledPushIds.delete(first);
+    }
   },
 
+  // Initialize native permissions, audio channels, and listeners
   async init(): Promise<string | null> {
     try {
-      const messaging = getMessaging();
+      console.log('🚀 [PushService] Initializing Native Push Notifications (FCM + Notifee)...');
+      const messagingInstance = getMessaging();
 
-      // 1. Request Push Permissions
-      const authStatus = await requestPermission(messaging);
-      const enabled =
-        authStatus === AuthorizationStatus.AUTHORIZED ||
-        authStatus === AuthorizationStatus.PROVISIONAL;
-
-      if (!enabled) {
-        console.warn('⚠️ [PushService] Notification permission denied');
-        return null;
+      // 1. Request notification permissions (iOS & Android 13+)
+      try {
+        const authStatus = await requestPermission(messagingInstance);
+        const enabled =
+          authStatus === AuthorizationStatus.AUTHORIZED ||
+          authStatus === AuthorizationStatus.PROVISIONAL;
+        console.log(`📱 [PushService] Permission status: ${authStatus} (enabled: ${enabled})`);
+      } catch (err) {
+        console.warn('⚠️ [PushService] requestPermission error:', err);
       }
 
-      // 2. Fetch FCM Token
-      const token = await getToken(messaging);
-      console.log('📲 [PushService] Device FCM Token:', token);
+      try {
+        await notifee.requestPermission();
+      } catch (err) {
+        console.warn('⚠️ [PushService] notifee.requestPermission error:', err);
+      }
 
-      // 3. Create Custom Audio Sound Channels on Android
+      // 2. Create Android Notification Channels with Custom Sound Support
       if (Platform.OS === 'android') {
-        const tones = [
-          { id: 'crystal_glass', name: 'Crystal Glass Alert', sound: 'crystal_glass' },
-          { id: 'electronic_pulse', name: 'Electronic Pulse', sound: 'electronic_pulse' },
-          { id: 'subtle_pop', name: 'Subtle Pop', sound: 'subtle_pop' },
-          { id: 'urgent_alarm', name: 'Urgent Alarm', sound: 'urgent_alarm' },
-        ];
+        await notifee.createChannel({
+          id: 'codepush_high_importance_channel',
+          name: 'CodePush High Importance Notifications',
+          importance: AndroidImportance.HIGH,
+          sound: 'crystal_glass',
+          vibration: true,
+        });
 
+        const tones = ['crystal_glass', 'electronic_pulse', 'subtle_pop', 'urgent_alarm', 'custom_notification', 'default'];
         for (const t of tones) {
           await notifee.createChannel({
-            id: `codepush_channel_${t.id}`,
-            name: t.name,
+            id: `codepush_channel_${t}`,
+            name: `CodePush Notifications (${t})`,
             importance: AndroidImportance.HIGH,
-            sound: t.sound,
+            sound: t !== 'default' ? t : 'default',
             vibration: true,
           });
         }
-
-        await notifee.createChannel({
-          id: 'codepush_high_importance_channel',
-          name: 'General CodePush Notifications',
-          importance: AndroidImportance.HIGH,
-          vibration: true,
-        });
       }
 
-      // 4. Foreground Push Listener
-      onMessage(messaging, async (remoteMessage: RemoteMessage) => {
+      // 3. Obtain Device FCM Token
+      let token: string | null = null;
+      try {
+        token = await getToken(messagingInstance);
+        if (token) {
+          this.fcmToken = token;
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          console.log('📱 [FCM] Device Token for Testing Console:');
+          console.log(token);
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        }
+      } catch (err) {
+        console.warn('⚠️ [FCM] Could not obtain FCM token:', err);
+      }
+
+      // 4. Foreground Push Notification Handler
+      onMessage(messagingInstance, async (remoteMessage: RemoteMessage) => {
+        const pushId = (remoteMessage.data?.pushId as string) || (remoteMessage.data?.id as string) || remoteMessage.messageId;
+        const title = remoteMessage.notification?.title || (remoteMessage.data?.title as string);
+        const body = remoteMessage.notification?.body || (remoteMessage.data?.body as string);
+
+        if (this.isPushAlreadyHandled(pushId, title, body)) return;
+
         await this.displayNativePush({
-          title: remoteMessage.notification?.title || remoteMessage.data?.title as string,
-          body: remoteMessage.notification?.body || remoteMessage.data?.body as string,
-          soundTone: remoteMessage.data?.soundTone as string,
-          route: remoteMessage.data?.route as string,
-          data: remoteMessage.data,
+          title,
+          body,
+          soundTone: (remoteMessage.data?.soundTone as string) || 'default',
+          route: (remoteMessage.data?.route as string) || (remoteMessage.data?.deepLink as string),
+          data: { ...remoteMessage.data, pushId },
         });
       });
 
       // 5. Deep Link handler on notification tap
       notifee.onForegroundEvent(({ type, detail }) => {
         if (type === EventType.PRESS && detail.notification?.data?.route) {
-          Linking.openURL(detail.notification.data.route as string).catch(() => {});
+          const route = detail.notification.data.route as string;
+          Linking.openURL(route).catch(() => {});
         }
       });
 
@@ -569,7 +655,9 @@ export const PushNotificationService = {
       const initialNotification = await notifee.getInitialNotification();
       if (initialNotification?.notification.data?.route) {
         const route = initialNotification.notification.data.route as string;
-        setTimeout(() => Linking.openURL(route).catch(() => {}), 800);
+        setTimeout(() => {
+          Linking.openURL(route).catch(() => {});
+        }, 800);
       }
 
       return token;
@@ -579,6 +667,7 @@ export const PushNotificationService = {
     }
   },
 
+  // Display native notification banner with custom tone & deep links
   async displayNativePush(payload: {
     title?: string;
     body?: string;
@@ -592,37 +681,55 @@ export const PushNotificationService = {
       this.markPushHandled(pushId, payload.title, payload.body);
 
       const rawTone = payload.soundTone || 'default';
-      const BUNDLED_TONES = ['crystal_glass', 'electronic_pulse', 'subtle_pop', 'urgent_alarm'];
+      const BUNDLED_TONES = ['crystal_glass', 'electronic_pulse', 'subtle_pop', 'urgent_alarm', 'custom_notification'];
       let cleanTone = 'default';
       if (rawTone !== 'default' && rawTone !== 'silent') {
         const parsed = String(rawTone).replace(/\.[^/.]+$/, '').toLowerCase();
-        cleanTone = BUNDLED_TONES.includes(parsed) ? parsed : 'default';
+        cleanTone = BUNDLED_TONES.includes(parsed) ? parsed : 'custom_notification';
+      } else if (rawTone === 'silent') {
+        cleanTone = 'silent';
       }
 
-      const channelId = cleanTone !== 'default'
+      const channelId = cleanTone !== 'default' && cleanTone !== 'silent'
         ? `codepush_channel_${cleanTone}`
         : 'codepush_high_importance_channel';
+
+      if (Platform.OS === 'android') {
+        try {
+          await notifee.createChannel({
+            id: channelId,
+            name: `CodePush Notifications (${cleanTone})`,
+            importance: AndroidImportance.HIGH,
+            sound: cleanTone !== 'silent' && cleanTone !== 'default' ? cleanTone : undefined,
+            vibration: true,
+          });
+        } catch {}
+      }
 
       await notifee.displayNotification({
         title: payload.title || 'CodePush Notification',
         body: payload.body || 'You have received a new update',
         android: {
           channelId,
-          sound: cleanTone !== 'default' ? cleanTone : undefined,
+          sound: cleanTone !== 'silent' ? cleanTone : undefined,
           pressAction: { id: 'default' },
           smallIcon: 'ic_launcher',
         },
         ios: {
-          sound: cleanTone !== 'default' ? `${cleanTone}.mp3` : undefined,
+          sound: cleanTone !== 'silent' ? `${cleanTone}.mp3` : undefined,
         },
         data: {
           ...payload.data,
-          route: payload.route,
+          route: payload.route || '',
           soundTone: cleanTone,
         },
       });
     } catch (err) {
       console.warn('❌ [PushService] displayNativePush error:', err);
+      try {
+        const { Alert } = require('react-native');
+        Alert.alert(payload.title || 'CodePush Notification', payload.body || 'You have received a new update');
+      } catch {}
     }
   },
 };
@@ -630,8 +737,9 @@ export const PushNotificationService = {
 
 ---
 
-## Step 5: Initialize in Root `App.tsx`
+## Step 5: Root App.tsx & Background index.js Setup
 
+### 1. Root `App.tsx` Lifecycle Wiring
 Inside your React Native root `App.tsx`:
 
 ```typescript
@@ -645,10 +753,10 @@ export default function App() {
     // 1. Arm Boot Watchdog immediately
     CodePushService.startBootWatchdog();
 
-    // 2. ⚡ Ultra-Fast Non-Blocking Launch: Check updates in background after UI is painted
+    // 2. Non-blocking update check after launch
     const checkTimer = setTimeout(() => {
       CodePushService.checkForUpdates();
-    }, 1500);
+    }, 1200);
 
     // 3. Real-time listeners for live testing alerts from dashboard
     const stopAlertListener = CodePushService.startLiveAlertListener();
@@ -666,8 +774,8 @@ export default function App() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>SkillSwap Mobile Client</Text>
-      <Text style={styles.subtitle}>Protected with CodePush OTA & Watchdog</Text>
+      <Text style={styles.title}>CodePush Protected Client</Text>
+      <Text style={styles.subtitle}>OTA & Push Notifications Active</Text>
     </View>
   );
 }
@@ -679,11 +787,121 @@ const styles = StyleSheet.create({
 });
 ```
 
+### 2. Root `index.js` Background FCM & Tap Event Registration
+**Crucial for Background & Killed-State Delivery:** In React Native, background FCM data messages and notification taps when the app is completely closed are delivered outside of React component lifecycles. Update your root `index.js`:
+
+```javascript
+/**
+ * @format
+ */
+
+import { AppRegistry, Linking } from 'react-native';
+import { getMessaging, setBackgroundMessageHandler } from '@react-native-firebase/messaging';
+import notifee, { EventType } from '@notifee/react-native';
+import App from './App';
+import { name as appName } from './app.json';
+import { PushNotificationService } from './src/services/PushNotificationService';
+
+// 1. Handle background FCM notifications when app is closed / killed
+try {
+  const messagingInstance = getMessaging();
+  setBackgroundMessageHandler(messagingInstance, async (remoteMessage) => {
+    console.log('🌙 [FCM] Background push notification received:', remoteMessage);
+    const pushId = remoteMessage.data?.pushId || remoteMessage.data?.id || remoteMessage.messageId;
+    const title = remoteMessage.notification?.title || remoteMessage.data?.title;
+    const body = remoteMessage.notification?.body || remoteMessage.data?.body;
+
+    if (PushNotificationService.isPushAlreadyHandled(pushId, title, body)) return;
+
+    await PushNotificationService.displayNativePush({
+      title,
+      body,
+      soundTone: remoteMessage.data?.soundTone || 'default',
+      route: remoteMessage.data?.route || remoteMessage.data?.deepLink,
+      data: { ...remoteMessage.data, pushId },
+    });
+  });
+} catch (e) {
+  console.warn('⚠️ [FCM] setBackgroundMessageHandler registration notice:', e);
+}
+
+// 2. Handle background interaction events (e.g., tap on notification while app is killed)
+notifee.onBackgroundEvent(async ({ type, detail }) => {
+  if (type === EventType.PRESS && detail.notification?.data?.route) {
+    const route = detail.notification.data.route;
+    try {
+      await Linking.openURL(route);
+    } catch {}
+  }
+});
+
+AppRegistry.registerComponent(appName, () => App);
+```
+
 ---
 
 ## Step 6: Native Android Platform Setup
 
-### 1. In `android/app/src/main/java/.../MainApplication.kt`:
+### 1. Android Manifest Permissions (`android/app/src/main/AndroidManifest.xml`)
+Add the required permissions inside the `<manifest>` tag. **`POST_NOTIFICATIONS` is strictly required on Android 13+ (API level 33+)**:
+
+```xml
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Network & OTA updates -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    
+    <!-- Android 13+ Push Notifications -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    
+    <!-- Custom Tone Vibration & Screen Wake -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    
+    <application ...>
+        ...
+    </application>
+</manifest>
+```
+
+### 2. Firebase Cloud Messaging (FCM) & Google Services Setup
+
+To enable real Google FCM device tokens and high-priority background delivery:
+
+1. **Register in Firebase Console:**
+   * Go to [Firebase Console](https://console.firebase.google.com) and create or select your project.
+   * Add an **Android** application. Enter your `applicationId` (e.g. `com.ghostapi` found in `android/app/build.gradle`).
+2. **Place `google-services.json`:**
+   * Download `google-services.json` and save it directly in:
+     ```text
+     android/app/google-services.json
+     ```
+3. **Configure Root `android/build.gradle`:**
+   * Add the Google Services classpath inside `buildscript.dependencies`:
+     ```groovy
+     buildscript {
+         dependencies {
+             classpath("com.android.tools.build:gradle")
+             classpath("com.facebook.react:react-native-gradle-plugin")
+             classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
+             classpath("com.google.gms:google-services:4.4.2") // <-- Add this line
+         }
+     }
+     ```
+4. **Configure App `android/app/build.gradle`:**
+   * Apply the Google Services plugin at the top:
+     ```groovy
+     apply plugin: "com.android.application"
+     apply plugin: "org.jetbrains.kotlin.android"
+     apply plugin: "com.facebook.react"
+     apply plugin: "com.google.gms.google-services" // <-- Add this line
+     ```
+5. **Server-Side Firebase Admin Key:**
+   * To allow the CodePush testing console to dispatch directly through Google FCM v1 servers:
+   * Download the Service Account private key JSON from Firebase Console (*Project Settings -> Service Accounts -> Generate new private key*).
+   * Either set its contents as an environment variable named `FIREBASE_SERVICE_ACCOUNT` in your Netlify deployment, or place the file as `firebase-service-account.json` in `netlify/functions/`.
+
+### 3. Load Bundle from Cache in `MainApplication.kt`
 Override `getJSBundleFile()` to load the downloaded CodePush bundle from cache:
 
 ```kotlin
@@ -695,7 +913,7 @@ override fun getJSBundleFile(): String? {
 }
 ```
 
-### 2. Add Notification Audio Files
+### 4. Add Notification Audio Files
 Place custom sound files (`crystal_glass.mp3`, `electronic_pulse.mp3`, `subtle_pop.mp3`, `urgent_alarm.mp3`) inside:
 ```text
 android/app/src/main/res/raw/

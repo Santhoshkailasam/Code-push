@@ -29,6 +29,8 @@ import type { Project } from '../../types';
 import { getCodePushServiceTemplate } from './templates/codePushServiceTemplate';
 import { getPushNotificationServiceTemplate } from './templates/pushNotificationServiceTemplate';
 import { getAndroidManifestTemplate, getAndroidManifestPermissionsSnippet } from './templates/androidManifestTemplate';
+import { getIndexJsTemplate } from './templates/indexJsTemplate';
+import { getFirebaseSetupGuide } from './templates/firebaseSetupTemplate';
 
 interface IntegrationScreenProps {
   theme?: 'dark' | 'light';
@@ -131,6 +133,8 @@ export const IntegrationScreen: React.FC<IntegrationScreenProps> = ({
   const pushNotificationServiceCode = getPushNotificationServiceTemplate();
   const androidManifestCode = getAndroidManifestTemplate(activeAppName);
   const androidManifestSnippet = getAndroidManifestPermissionsSnippet();
+  const indexJsCode = getIndexJsTemplate();
+  const firebaseGuide = getFirebaseSetupGuide();
 
   const handleDownloadCodePushService = () => {
     downloadFile('CodePushService.ts', codePushServiceCode, 'text/typescript');
@@ -142,6 +146,10 @@ export const IntegrationScreen: React.FC<IntegrationScreenProps> = ({
 
   const handleDownloadAndroidManifest = () => {
     downloadFile('AndroidManifest.xml', androidManifestCode, 'application/xml');
+  };
+
+  const handleDownloadIndexJs = () => {
+    downloadFile('index.js', indexJsCode, 'text/javascript');
   };
 
   const appTsxExampleCode = `import React, { useEffect } from 'react';
@@ -297,9 +305,10 @@ jobs:
 
   const handleDownloadAllStarterFiles = () => {
     handleDownloadCodepushJson();
-    setTimeout(handleDownloadCodePushService, 250);
-    setTimeout(handleDownloadPushNotificationService, 500);
-    setTimeout(handleDownloadAndroidManifest, 750);
+    setTimeout(handleDownloadCodePushService, 200);
+    setTimeout(handleDownloadPushNotificationService, 400);
+    setTimeout(handleDownloadAndroidManifest, 600);
+    setTimeout(handleDownloadIndexJs, 800);
   };
 
   const installCmds = {
@@ -1045,6 +1054,120 @@ jobs:
                     <pre className="whitespace-pre-wrap">{androidManifestSnippet}</pre>
                   </div>
                 </div>
+
+                {/* File 4: index.js (Background FCM & Killed State Handler) */}
+                <div className={`p-4 rounded-2xl border flex flex-col gap-3 ${subCardBgClass}`}>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-start space-x-3 min-w-0">
+                      <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/25 text-purple-400 shrink-0">
+                        <FileCode2 className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0 space-y-0.5">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-mono text-sm font-bold text-white">index.js</span>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                            FCM Background & Notification Tap
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400">
+                          Configure in: <span className="font-mono text-slate-300">index.js</span> (Project Root)
+                        </p>
+                        <p className="text-[11px] text-slate-400">
+                          Critical: Registers <code className="text-purple-400 font-mono">setBackgroundMessageHandler</code> and <code className="text-purple-400 font-mono">notifee.onBackgroundEvent</code> so notifications display when app is closed or killed.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-2 shrink-0 self-end sm:self-center">
+                      <button
+                        type="button"
+                        onClick={handleDownloadIndexJs}
+                        className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition-all shadow-md shadow-purple-500/20 active:scale-95 cursor-pointer"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        <span>Download index.js</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(indexJsCode, 'index_js_code')}
+                        className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold text-xs transition-all cursor-pointer"
+                      >
+                        {copiedKey === 'index_js_code' ? (
+                          <>
+                            <Check className="h-3.5 w-3.5 text-emerald-400" />
+                            <span className="text-emerald-400">Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3.5 w-3.5 text-slate-400" />
+                            <span>Copy index.js</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl bg-slate-950 border border-slate-800/80 p-3 font-mono text-[11px] text-purple-300 overflow-x-auto max-h-48">
+                    <pre className="whitespace-pre-wrap">{indexJsCode}</pre>
+                  </div>
+                </div>
+
+                {/* File 5: Firebase Cloud Messaging (FCM) & Google Services Setup */}
+                <div className={`p-4 rounded-2xl border flex flex-col gap-3 ${subCardBgClass}`}>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-start space-x-3 min-w-0">
+                      <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-400 shrink-0">
+                        <BellRing className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0 space-y-0.5">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-mono text-sm font-bold text-white">google-services.json & Gradle Setup</span>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                            Firebase FCM v1
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400">
+                          Target: <span className="font-mono text-slate-300">android/app/google-services.json</span>
+                        </p>
+                        <p className="text-[11px] text-slate-400">
+                          Connects your Android app to Firebase to obtain Device FCM Tokens for instant native push alerts.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-2 shrink-0 self-end sm:self-center">
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(firebaseGuide.instructions, 'fcm_guide')}
+                        className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs transition-all shadow-md shadow-amber-500/20 active:scale-95 cursor-pointer"
+                      >
+                        {copiedKey === 'fcm_guide' ? (
+                          <>
+                            <Check className="h-3.5 w-3.5" />
+                            <span>Copied Guide</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3.5 w-3.5" />
+                            <span>Copy FCM Setup Steps</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
+                      <span className="font-mono text-[10px] uppercase font-bold text-slate-400">1. android/build.gradle</span>
+                      <pre className="text-amber-300 font-mono text-[11px] whitespace-pre-wrap">{firebaseGuide.rootGradle}</pre>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
+                      <span className="font-mono text-[10px] uppercase font-bold text-slate-400">2. android/app/build.gradle</span>
+                      <pre className="text-amber-300 font-mono text-[11px] whitespace-pre-wrap">{firebaseGuide.appGradle}</pre>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Instructions Card */}
@@ -1056,7 +1179,9 @@ jobs:
                 <ol className="list-decimal list-inside space-y-1.5 text-xs text-slate-300 leading-relaxed">
                   <li>Create a directory named <code className="text-cyan-400 font-mono">src/services/</code> in your project.</li>
                   <li>Click <strong className="text-white">Download</strong> on both services above and place them into <code className="text-cyan-400 font-mono">src/services/</code>.</li>
-                  <li>In your <code className="text-white font-mono">android/app/src/main/AndroidManifest.xml</code>, paste the permissions block inside the <code className="text-emerald-400 font-mono">&lt;manifest&gt;</code> tag to enable Android 13+ push notifications, high-importance audio channels, and watchdog boot survival.</li>
+                  <li>In your <code className="text-white font-mono">android/app/src/main/AndroidManifest.xml</code>, paste the permissions block inside the <code className="text-emerald-400 font-mono">&lt;manifest&gt;</code> tag.</li>
+                  <li>Replace your root <code className="text-white font-mono">index.js</code> with the background-enabled template to handle push notifications when the app is closed.</li>
+                  <li>Download <code className="text-amber-400 font-mono">google-services.json</code> from Firebase Console and add the Gradle plugins to enable FCM device tokens.</li>
                 </ol>
               </div>
 
