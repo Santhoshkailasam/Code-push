@@ -1,0 +1,48 @@
+{
+  "name": "codepush",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "bin": {
+    "codepush": "./bin/codepush.mjs"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "cli": "node ./bin/codepush.mjs",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^11.1.3",
+    "@netlify/functions": "^6.0.0",
+    "dotenv": "^16.4.7",
+    "firebase": "^12.19.0",
+    "firebase-admin": "^14.5.0",
+    "jszip": "^3.10.2",
+    "lucide-react": "^1.47.0",
+    "pg": "^8.13.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-dropzone": "^20.1.2",
+    "source-map-js": "^1.2.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/jszip": "^3.4.0",
+    "@types/node": "^24.13.3",
+    "@types/pg": "^8.11.11",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "eslint": "^10.10.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.6",
+    "globals": "^17.12.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.2",
+    "typescript-eslint": "^8.69.0",
+    "vite": "^8.3.0"
+  }
+}

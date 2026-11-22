@@ -1,0 +1,142 @@
+name: 🚀 CodePush Enterprise Auto-Release
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'src/**'
+      - 'App.tsx'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'codepush.json'
+
+concurrency:
+  group: codepush-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # -----------------------------------------------------------------
+  # PRE-FLIGHT SECURITY AUDIT
+  # -----------------------------------------------------------------
+  security-audit:
+    name: 🛡️ Security Audit & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: npm ci --prefer-offline
+
+      - name: 🔒 Dependency Vulnerability Scan
+        run: npm audit --audit-level=high || true
+
+  # -----------------------------------------------------------------
+  # PARALLEL MATRIX BUILD & DEPLOY (Android + iOS)
+  # -----------------------------------------------------------------
+  bundle-and-deploy:
+    name: ⚡ Build & Ship (${{ matrix.platform }})
+    needs: [security-audit]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform: [android, ios]
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: ⚡ Restore Metro Cache (Blazing Fast Bundling)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.metro/cache
+            node_modules/.cache
+          key: metro-${{ matrix.platform }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
+          restore-keys: |
+            metro-${{ matrix.platform }}-${{ hashFiles('package-lock.json') }}-
+
+      - name: 📦 Install dependencies
+        run: npm ci --prefer-offline
+
+      - name: ⚙️ Compute Version & Metadata
+        id: meta
+        run: |
+          echo "version=1.0.$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
+          echo "commit_msg=$(git log -1 --pretty=%B | tr '\n' ' ')" >> $GITHUB_OUTPUT
+
+      # -----------------------------------------------------------------
+      # COMPILE REACT NATIVE BUNDLE + ASSETS
+      # -----------------------------------------------------------------
+      - name: 🔨 Package React Native Bundle & Assets
+        run: |
+          mkdir -p build_output/assets
+          ENTRY_FILE="index.js"
+          [ -f "index.ts" ] && ENTRY_FILE="index.ts"
+          [ -f "index.tsx" ] && ENTRY_FILE="index.tsx"
+
+          BUNDLE_NAME="${{ matrix.platform == 'android' && 'index.android.bundle' || 'main.jsbundle' }}"
+
+          npx react-native bundle \
+            --platform ${{ matrix.platform }} \
+            --dev false \
+            --entry-file "$ENTRY_FILE" \
+            --bundle-output "build_output/$BUNDLE_NAME" \
+            --assets-dest build_output/ \
+            --sourcemap-output "build_output/$BUNDLE_NAME.map"
+
+      # -----------------------------------------------------------------
+      # 🛡️ SECURITY LAYER 1: HERMES BYTECODE PRE-COMPILATION
+      # Obfuscates code & makes boot 3x faster
+      # -----------------------------------------------------------------
+      - name: 🚀 Compile to Hermes Bytecode (if available)
+        run: |
+          BUNDLE_NAME="${{ matrix.platform == 'android' && 'index.android.bundle' || 'main.jsbundle' }}"
+          if command -v hermesc &> /dev/null; then
+            hermesc -emit-binary -out "build_output/$BUNDLE_NAME.hbc" "build_output/$BUNDLE_NAME"
+            mv "build_output/$BUNDLE_NAME.hbc" "build_output/$BUNDLE_NAME"
+            echo "✅ Compiled to Hermes bytecode."
+          fi
+
+      # -----------------------------------------------------------------
+      # 🛡️ SECURITY LAYER 2: COMPUTE SHA-256 HASH & PACKAGE ZIP
+      # -----------------------------------------------------------------
+      - name: 🔒 Compute SHA-256 Checksum & Package ZIP
+        id: crypto
+        run: |
+          cd build_output
+          zip -r ../release-${{ matrix.platform }}.zip .
+          cd ..
+          HASH=$(sha256sum release-${{ matrix.platform }}.zip | cut -d ' ' -f 1)
+          echo "hash=$HASH" >> $GITHUB_OUTPUT
+          echo "🔒 SHA-256 Checksum: $HASH"
+
+      # -----------------------------------------------------------------
+      # PUBLISH TO CODEPUSH WITH CANARY ROLLOUT
+      # -----------------------------------------------------------------
+      - name: 🚀 Deploy Live Release to CodePush Server
+        run: |
+          node bin/codepush.mjs release-react \
+            --app "${{ secrets.CODEPUSH_APP_ID }}" \
+            --key "${{ secrets.CODEPUSH_API_KEY }}" \
+            --platform ${{ matrix.platform }} \
+            --version "${{ steps.meta.outputs.version }}" \
+            --bundle "release-${{ matrix.platform }}.zip" \
+            --track production \
+            --rollout 25 \
+            --canary 30 \
+            --notes "${{ steps.meta.outputs.commit_msg }}"

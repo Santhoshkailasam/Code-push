@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Smartphone, Sparkles } from 'lucide-react';
+import { X, Smartphone, Sparkles, Eye, EyeOff } from 'lucide-react';
 import type { Project } from '../types';
 
 interface CreateProjectModalProps {
@@ -20,6 +20,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
   const isDark = theme === 'dark';
   const [appName, setAppName] = useState('');
   const [generatedId, setGeneratedId] = useState('');
+  const [showId, setShowId] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
 
   useEffect(() => {
@@ -29,6 +30,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
       const randomSuffix = Math.random().toString(36).substring(2, 7);
       setGeneratedId(`app_${shortUid}_${Date.now().toString(36)}_${randomSuffix}`);
       setCopiedId(false);
+      setShowId(false);
     }
   }, [isOpen, userId]);
 
@@ -133,20 +135,36 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                   : 'bg-slate-50 border-slate-200 text-blue-600'
               }`}
             >
-              <span className="font-bold truncate max-w-[280px]">{generatedId}</span>
-              <button
-                type="button"
-                onClick={handleCopyId}
-                className={`ml-2 px-2 py-1 rounded-lg text-[10px] font-sans font-bold transition-all cursor-pointer shrink-0 ${
-                  copiedId
-                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                    : isDark
-                    ? 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-                    : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
-                }`}
-              >
-                {copiedId ? 'Copied!' : 'Copy'}
-              </button>
+              <span className="font-bold truncate max-w-[240px]">
+                {showId ? generatedId : '••••••••••••••••••••••••'}
+              </span>
+              <div className="flex items-center space-x-1 shrink-0 ml-2">
+                <button
+                  type="button"
+                  onClick={() => setShowId(!showId)}
+                  className={`p-1.5 rounded-lg text-xs transition-all cursor-pointer flex items-center justify-center ${
+                    isDark
+                      ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white'
+                      : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
+                  }`}
+                  title={showId ? "Hide App ID" : "Reveal App ID"}
+                >
+                  {showId ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCopyId}
+                  className={`px-2 py-1 rounded-lg text-[10px] font-sans font-bold transition-all cursor-pointer shrink-0 ${
+                    copiedId
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      : isDark
+                      ? 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                      : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
+                  }`}
+                >
+                  {copiedId ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
             </div>
             <p className={`text-[11px] mt-1.5 ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>
               Your releases and bundles will be scoped to this App ID.

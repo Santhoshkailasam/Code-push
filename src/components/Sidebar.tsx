@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Layers,
   UploadCloud,
@@ -11,6 +11,12 @@ import {
   ChevronDown,
   Check,
   Smartphone,
+  Radio,
+  Eye,
+  EyeOff,
+  Sliders,
+  Bug,
+  Code2,
 } from 'lucide-react';
 import type { Project } from '../types';
 
@@ -25,7 +31,7 @@ interface SidebarProps {
   onSwitchProject?: (projectId: string) => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({
+export function Sidebar({
   activeTab,
   setActiveTab,
   isCollapsed,
@@ -34,9 +40,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   projects = [],
   activeProjectId,
   onSwitchProject,
-}) => {
+}: SidebarProps) {
   const isDark = theme === 'dark';
   const [showAppDropdown, setShowAppDropdown] = useState(false);
+  const [showAppId, setShowAppId] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const activeProject = projects.find((p) => p.id === activeProjectId) || projects[0];
@@ -60,8 +67,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'dashboard', label: 'Dashboard', icon: Layers },
     { id: 'publish', label: 'Publish Update', icon: UploadCloud },
     { id: 'history', label: 'Release History', icon: History },
+    { id: 'remote-config', label: 'Remote Config', icon: Sliders },
+    { id: 'crashes', label: 'Crash Analytics', icon: Bug },
+    { id: 'testing', label: 'Live Testing', icon: Radio },
+    { id: 'docs', label: 'Documentation', icon: BookOpen },
+    { id: 'integration', label: 'SDK Integration', icon: Code2 },
     { id: 'profile', label: 'Profile & API Keys', icon: KeyRound },
-    { id: 'docs', label: 'Integration Docs', icon: BookOpen },
   ];
 
   return (
@@ -140,8 +151,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       {activeProject?.name || 'Select App'}
                     </div>
                     {activeProject?.id && (
-                      <div className={`text-[10px] font-mono truncate leading-tight mt-0.5 ${isDark ? 'text-cyan-400' : 'text-cyan-700 font-bold'}`}>
-                        {activeProject.id}
+                      <div className="flex items-center space-x-1.5 mt-0.5">
+                        <div className={`text-[10px] font-mono truncate leading-tight ${isDark ? 'text-cyan-400' : 'text-cyan-700 font-bold'}`}>
+                          {showAppId ? activeProject.id : '••••••••••••••••'}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowAppId(!showAppId);
+                          }}
+                          className="p-0.5 text-slate-400 hover:text-cyan-400 transition-colors cursor-pointer"
+                          title={showAppId ? "Hide App ID" : "Reveal App ID"}
+                        >
+                          {showAppId ? <EyeOff className="h-2.5 w-2.5" /> : <Eye className="h-2.5 w-2.5" />}
+                        </button>
                       </div>
                     )}
                   </div>
@@ -186,7 +210,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             <div className="truncate flex-1 min-w-0">
                               <div className="truncate font-extrabold">{proj.name}</div>
                               <div className={`text-[9px] font-mono truncate ${isActive ? 'text-cyan-600 dark:text-cyan-400 font-bold' : 'text-slate-400'}`}>
-                                {proj.id}
+                                {showAppId ? proj.id : '••••••••••••••••'}
                               </div>
                             </div>
                           </div>
@@ -351,6 +375,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
     </aside>
   );
-};
+}
+
+Sidebar.displayName = 'Sidebar';
 
 export default Sidebar;

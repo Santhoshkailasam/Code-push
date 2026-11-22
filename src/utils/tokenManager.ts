@@ -213,12 +213,16 @@ export async function getValidAccessToken(forceRefresh = false): Promise<string>
       // Force sign out if refresh token fails
       await signOut(auth);
       localStorage.removeItem('codepush_cached_user');
+      localStorage.setItem('codepush_active_tab', 'dashboard');
+      localStorage.removeItem('codepush_selected_release_detail');
       throw new Error('SESSION_EXPIRED');
     }
   }
 
   if (cachedSession && now >= cachedSession.expiresAt) {
     localStorage.removeItem('codepush_cached_user');
+    localStorage.setItem('codepush_active_tab', 'dashboard');
+    localStorage.removeItem('codepush_selected_release_detail');
     throw new Error('SESSION_EXPIRED');
   }
 

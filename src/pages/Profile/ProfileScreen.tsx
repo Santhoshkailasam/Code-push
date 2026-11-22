@@ -63,6 +63,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [copiedUid, setCopiedUid] = useState(false);
   const [copiedSnippet, setCopiedSnippet] = useState(false);
   const [copiedAppId, setCopiedAppId] = useState<string | null>(null);
+  const [revealedAppIds, setRevealedAppIds] = useState<Record<string, boolean>>({});
+  const [revealedAppKeys, setRevealedAppKeys] = useState<Record<string, boolean>>({});
+  const [copiedAppKey, setCopiedAppKey] = useState<string | null>(null);
   const [copiedWebhookUrl, setCopiedWebhookUrl] = useState<string | null>(null);
   const [isSignOutConfirmOpen, setIsSignOutConfirmOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
@@ -144,8 +147,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     setTimeout(() => setFn(false), 2500);
   };
 
+  const displayApiKey = showKey ? apiKey : '••••••••••••••••••••••••••••••••••••••••';
+
   const snippets = {
-    env: `CODEPUSH_SERVER_URL=https://codepushs.netlify.app\nCODEPUSH_API_KEY=${apiKey}`,
+    env: `CODEPUSH_SERVER_URL=https://codepushs.netlify.app\nCODEPUSH_API_KEY=${displayApiKey}`,
     github: `- name: 🚀 Publish OTA Release to CodePush Server
   run: |
     curl -X POST "https://codepushs.netlify.app/.netlify/functions/publish-release" \\
@@ -157,6 +162,38 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         "downloadUrl": "https://your-site.netlify.app/bundles/android-\${{ steps.vars.outputs.version }}.zip",
         "mandatory": true
       }'`,
+    curl: `curl -X POST "https://codepushs.netlify.app/.netlify/functions/publish-release" \\
+  -H "Content-Type: application/json" \\
+  -H "x-codepush-api-key: ${displayApiKey}" \\
+  -d '{
+    "platform": "android",
+    "version": "1.0.0",
+    "downloadUrl": "https://example.com/bundle.zip",
+    "mandatory": true,
+    "description": "Hotfix OTA Bundle"
+  }'`,
+    rn: `import React, { useEffect } from 'react';
+import { View, Text } from 'react-native';
+
+const CODEPUSH_SERVER_URL = "https://codepushs.netlify.app";
+const CODEPUSH_API_KEY = "${displayApiKey}";
+
+export default function App() {
+  useEffect(() => {
+    fetch(\`\${CODEPUSH_SERVER_URL}/.netlify/functions/releases?platform=android\`, {
+      headers: { 'x-codepush-api-key': CODEPUSH_API_KEY }
+    })
+    .then(res => res.json())
+    .then(data => console.log('CodePush Release:', data));
+  }, []);
+
+  return <View><Text>App Active</Text></View>;
+}`,
+  };
+
+  const copySnippets: Record<'env' | 'github' | 'curl' | 'rn', string> = {
+    env: `CODEPUSH_SERVER_URL=https://codepushs.netlify.app\nCODEPUSH_API_KEY=${apiKey}`,
+    github: snippets.github,
     curl: `curl -X POST "https://codepushs.netlify.app/.netlify/functions/publish-release" \\
   -H "Content-Type: application/json" \\
   -H "x-codepush-api-key: ${apiKey}" \\
@@ -506,7 +543,7 @@ export default function App() {
 
               <button
                 type="button"
-                onClick={() => copyToClipboard(snippets[activeSnippetTab], setCopiedSnippet, 'Code snippet copied!')}
+                onClick={() => copyToClipboard(copySnippets[activeSnippetTab], setCopiedSnippet, 'Code snippet copied!')}
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all cursor-pointer ${
                   copiedSnippet
                     ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
@@ -765,31 +802,100 @@ export default function App() {
                         </div>
                         <div className="flex items-center justify-between gap-2">
                           <code
-                            className={`font-bold truncate text-xs select-all ${
+                            className={`font-bold truncate text-xs select-all font-mono ${
                               isDark ? 'text-cyan-300' : 'text-cyan-800'
                             }`}
                           >
-                            {proj.id}
+                            {revealedAppIds[proj.id] ? proj.id : '••••••••••••••••••••••••'}
                           </code>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              navigator.clipboard.writeText(proj.id);
-                              setCopiedAppId(proj.id);
-                              showToast(`Copied App ID "${proj.id}"!`);
-                              setTimeout(() => setCopiedAppId(null), 2000);
-                            }}
-                            className={`px-2.5 py-1 rounded-lg text-[11px] font-sans font-bold transition-all cursor-pointer shrink-0 flex items-center space-x-1 ${
-                              copiedAppId === proj.id
-                                ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
-                                : isDark
-                                ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
-                                : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs'
+                          <div className="flex items-center space-x-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setRevealedAppIds(prev => ({ ...prev, [proj.id]: !prev[proj.id] }))}
+                              className={`p-1.5 rounded-lg text-xs font-sans font-bold transition-all cursor-pointer flex items-center justify-center ${
+                                isDark
+                                  ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 hover:text-white'
+                                  : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs'
+                              }`}
+                              title={revealedAppIds[proj.id] ? "Hide App ID" : "Reveal App ID"}
+                            >
+                              {revealedAppIds[proj.id] ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(proj.id);
+                                setCopiedAppId(proj.id);
+                                showToast(`Copied App ID "${proj.id}"!`);
+                                setTimeout(() => setCopiedAppId(null), 2000);
+                              }}
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-sans font-bold transition-all cursor-pointer shrink-0 flex items-center space-x-1 ${
+                                copiedAppId === proj.id
+                                  ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                                  : isDark
+                                  ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+                                  : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs'
+                              }`}
+                            >
+                              {copiedAppId === proj.id ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                              <span>{copiedAppId === proj.id ? 'Copied' : 'Copy'}</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* App Dedicated API Key Line */}
+                      <div className="pt-2 border-t border-slate-200 dark:border-slate-800/80">
+                        <div className="flex items-center justify-between mb-1.5 font-sans">
+                          <span className={`text-[10px] uppercase font-bold tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                            App API Key
+                          </span>
+                          <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                            Private Key
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <code
+                            className={`font-bold truncate text-xs select-all font-mono ${
+                              isDark ? 'text-amber-300' : 'text-amber-800'
                             }`}
                           >
-                            {copiedAppId === proj.id ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                            <span>{copiedAppId === proj.id ? 'Copied' : 'Copy'}</span>
-                          </button>
+                            {revealedAppKeys[proj.id] ? (proj.apiKey || apiKey) : '••••••••••••••••••••••••••••••••'}
+                          </code>
+                          <div className="flex items-center space-x-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setRevealedAppKeys(prev => ({ ...prev, [proj.id]: !prev[proj.id] }))}
+                              className={`p-1.5 rounded-lg text-xs font-sans font-bold transition-all cursor-pointer flex items-center justify-center ${
+                                isDark
+                                  ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 hover:text-white'
+                                  : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs'
+                              }`}
+                              title={revealedAppKeys[proj.id] ? "Hide API Key" : "Reveal API Key"}
+                            >
+                              {revealedAppKeys[proj.id] ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const keyToCopy = proj.apiKey || apiKey;
+                                navigator.clipboard.writeText(keyToCopy);
+                                setCopiedAppKey(proj.id);
+                                showToast(`Copied API Key for "${proj.name}"!`);
+                                setTimeout(() => setCopiedAppKey(null), 2000);
+                              }}
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-sans font-bold transition-all cursor-pointer shrink-0 flex items-center space-x-1 ${
+                                copiedAppKey === proj.id
+                                  ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                                  : isDark
+                                  ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+                                  : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs'
+                              }`}
+                            >
+                              {copiedAppKey === proj.id ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                              <span>{copiedAppKey === proj.id ? 'Copied' : 'Copy'}</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
 

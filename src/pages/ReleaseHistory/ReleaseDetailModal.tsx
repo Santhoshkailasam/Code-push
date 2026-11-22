@@ -36,54 +36,34 @@ export const ReleaseDetailModal: React.FC<Props> = ({ isOpen, item, onClose, the
 
   const isDark = theme === 'dark';
 
-  // Generate realistic live device telemetry logs
+  // Fetch real live device telemetry logs strictly for THIS release
   useEffect(() => {
     if (!isOpen || !item) return;
 
-    const devicesAndroid = ['Pixel 8 Pro', 'Samsung S24 Ultra', 'OnePlus 12', 'Galaxy A54', 'Xiaomi 14'];
-    const devicesIos = ['iPhone 15 Pro Max', 'iPhone 14', 'iPhone SE (3rd gen)', 'iPhone 13 Pro'];
-    const pool = item.platform === 'android' ? devicesAndroid : devicesIos;
+    const fetchRealTelemetry = async () => {
+      try {
+        const cleanReleaseVer = (item.version || '').replace(/^v/, '').trim();
+        const res = await fetch('https://tracker-42b47-default-rtdb.asia-southeast1.firebasedatabase.app/codepush_releases/telemetry.json?t=' + Date.now());
+        if (res.ok) {
+          const data = await res.json();
+          const allLogs = Array.isArray(data) ? data : (data && typeof data === 'object' ? Object.values(data) : []);
+          
+          // STRICT FILTER: Only show pings belonging to THIS specific release
+          const filtered = allLogs.filter((log: any) => {
+            const logVer = (log.version || '').replace(/^v/, '').trim();
+            const logAction = log.action || '';
+            return logVer === cleanReleaseVer || logAction.includes(cleanReleaseVer);
+          });
+          setLiveLogEntries(filtered);
+        }
+      } catch (e) {
+        console.warn('Realtime telemetry fetch error:', e);
+      }
+    };
 
-    const initialLogs = Array.from({ length: 4 }).map((_, idx) => {
-      const dev = pool[Math.floor(Math.random() * pool.length)];
-      const now = new Date(Date.now() - (3 - idx) * 4000);
-      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      return {
-        id: `log_${Date.now()}_${idx}`,
-        time: timeStr,
-        device: dev,
-        action: `Checked for updates -> Applied v${item.version} successfully`,
-        status: 'ok' as const,
-      };
-    });
-
-    setLiveLogEntries(initialLogs);
-
+    fetchRealTelemetry();
     if (!isLiveStreaming) return;
-
-    const interval = setInterval(() => {
-      const dev = pool[Math.floor(Math.random() * pool.length)];
-      const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      const actions = [
-        `SDK check-in -> Up to date (v${item.version})`,
-        `Downloading binary delta (${item.sizeBytes ? Math.round(item.sizeBytes / 1024) : 180} KB)`,
-        `Verified SHA256 signature -> Swapped bundle`,
-        `App rebooted -> Active release v${item.version}`,
-      ];
-      const act = actions[Math.floor(Math.random() * actions.length)];
-
-      setLiveLogEntries((prev) => [
-        {
-          id: `log_${Date.now()}_${Math.random()}`,
-          time: nowStr,
-          device: dev,
-          action: act,
-          status: 'ok',
-        },
-        ...prev.slice(0, 9),
-      ]);
-    }, 3500);
-
+    const interval = setInterval(fetchRealTelemetry, 2500);
     return () => clearInterval(interval);
   }, [isOpen, item, isLiveStreaming]);
 
@@ -401,24 +381,30 @@ export const ReleaseDetailModal: React.FC<Props> = ({ isOpen, item, onClose, the
               </button>
             </div>
 
-            <div className="font-mono text-[11px] space-y-1.5 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-              {liveLogEntries.map((log) => (
-                <div
-                  key={log.id}
-                  className="flex items-start justify-between p-2 rounded-lg bg-slate-900 border border-slate-800/80 text-slate-300 animate-fadeIn"
-                >
-                  <div className="flex items-center space-x-2">
-                    <span className="text-emerald-400 font-bold">[{log.time}]</span>
-                    <span className="text-cyan-300 font-bold">{log.device}</span>
-                    <span className="text-slate-400">→</span>
-                    <span className="text-slate-200">{log.action}</span>
+            {liveLogEntries.length === 0 ? (
+              <div className="p-4 text-center text-xs text-slate-400 font-mono bg-slate-900/60 rounded-xl border border-slate-800">
+                No mobile phone pings recorded for release v{item.version} yet. Live telemetry strictly for this release will stream here as devices connect. 📱
+              </div>
+            ) : (
+              <div className="font-mono text-[11px] space-y-1.5 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                {liveLogEntries.map((log: any) => (
+                  <div
+                    key={log.id}
+                    className="flex items-start justify-between p-2 rounded-lg bg-slate-900 border border-slate-800/80 text-slate-300 animate-fadeIn"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <span className="text-emerald-400 font-bold">[{log.time}]</span>
+                      <span className="text-cyan-300 font-bold">{log.device}</span>
+                      <span className="text-slate-400">→</span>
+                      <span className="text-slate-200">{log.action}</span>
+                    </div>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold shrink-0 ml-2">
+                      v{log.version || item.version}
+                    </span>
                   </div>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold shrink-0 ml-2">
-                    200 OK
-                  </span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Download & Copy Bundle Link Bar */}

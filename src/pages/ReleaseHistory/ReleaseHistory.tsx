@@ -5,16 +5,12 @@ import {
   RotateCcw,
   Smartphone,
   Apple,
-  Hash,
-  AlertTriangle,
-  CheckCircle2,
   Trash2,
   Eye,
   Search,
   Layers,
-  Copy,
-  Check,
-  Calendar,
+  ShieldAlert,
+  ArrowUpRight,
 } from 'lucide-react';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { ReleaseDetailModal } from './ReleaseDetailModal';
@@ -25,6 +21,8 @@ interface Props {
   onRollback: (item: ReleaseHistoryItem) => void;
   onDelete?: (id: string) => void;
   onSelectReleaseForDetail?: (item: ReleaseHistoryItem) => void;
+  onPromote?: (item: ReleaseHistoryItem) => void;
+  onRevoke?: (item: ReleaseHistoryItem) => void;
   theme?: 'dark' | 'light';
   isLoading?: boolean;
 }
@@ -34,6 +32,8 @@ export const ReleaseHistory: React.FC<Props> = ({
   onRollback,
   onDelete,
   onSelectReleaseForDetail,
+  onPromote,
+  onRevoke,
   theme = 'dark',
   isLoading = false,
 }) => {
@@ -45,8 +45,8 @@ export const ReleaseHistory: React.FC<Props> = ({
 
   const [selectedDetailRelease, setSelectedDetailRelease] = useState<ReleaseHistoryItem | null>(null);
   const [platformFilter, setPlatformFilter] = useState<'all' | 'android' | 'ios'>('all');
+  const [trackFilter, setTrackFilter] = useState<'all' | 'production' | 'staging'>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [copiedHashId, setCopiedHashId] = useState<string | null>(null);
 
   const handleView = (item: ReleaseHistoryItem) => {
     if (onSelectReleaseForDetail) {
@@ -56,22 +56,17 @@ export const ReleaseHistory: React.FC<Props> = ({
     }
   };
 
-  const copyHash = (hash: string, id: string) => {
-    navigator.clipboard.writeText(hash);
-    setCopiedHashId(id);
-    setTimeout(() => setCopiedHashId(null), 2000);
-  };
-
   const filteredHistory = useMemo(() => {
     return history.filter((item) => {
       const matchesPlatform = platformFilter === 'all' || item.platform === platformFilter;
+      const matchesTrack = trackFilter === 'all' || (item.track || 'production') === trackFilter;
       const matchesSearch =
         item.version.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (item.releaseNotes && item.releaseNotes.toLowerCase().includes(searchQuery.toLowerCase())) ||
         item.hash.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesPlatform && matchesSearch;
+      return matchesPlatform && matchesTrack && matchesSearch;
     });
-  }, [history, platformFilter, searchQuery]);
+  }, [history, platformFilter, trackFilter, searchQuery]);
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -95,435 +90,367 @@ export const ReleaseHistory: React.FC<Props> = ({
 
   const androidCount = useMemo(() => history.filter((h) => h.platform === 'android').length, [history]);
   const iosCount = useMemo(() => history.filter((h) => h.platform === 'ios').length, [history]);
-  const mandatoryCount = useMemo(() => history.filter((h) => h.mandatory).length, [history]);
+  const stagingCount = useMemo(() => history.filter((h) => h.track === 'staging').length, [history]);
+  const revokedCount = useMemo(() => history.filter((h) => h.revoked).length, [history]);
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-16 animate-fade-in">
+    <div className="space-y-6 max-w-7xl mx-auto pb-16 animate-fade-in font-sans">
       {/* Top Metrics Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div
-          className={`p-5 rounded-3xl border transition-all duration-300 ${cardBgClass}`}
-        >
+        <div className={`p-5 rounded-3xl border transition-all duration-300 ${cardBgClass}`}>
           <div className="flex items-center justify-between">
             <span className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
               Total Releases
             </span>
             <div className="p-2.5 rounded-2xl bg-cyan-500/15 text-cyan-600 dark:text-cyan-400">
-              <History className="h-4 w-4" />
+              <History className="h-5 w-5" />
             </div>
           </div>
-          <div className={`text-2xl font-black mt-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-            {history.length}
+          <div className="mt-3 flex items-baseline space-x-2">
+            <span className="text-3xl font-black">{history.length}</span>
+            <span className="text-xs font-medium text-slate-400">records</span>
           </div>
-          <span className="text-[11px] font-semibold text-slate-400 mt-1 block">
-            Published Over-The-Air
-          </span>
         </div>
 
-        <div
-          className={`p-5 rounded-3xl border transition-all duration-300 ${cardBgClass}`}
-        >
+        <div className={`p-5 rounded-3xl border transition-all duration-300 ${cardBgClass}`}>
           <div className="flex items-center justify-between">
             <span className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-              Android Builds
+              Staging Track
+            </span>
+            <div className="p-2.5 rounded-2xl bg-purple-500/15 text-purple-600 dark:text-purple-400">
+              <Layers className="h-5 w-5" />
+            </div>
+          </div>
+          <div className="mt-3 flex items-baseline space-x-2">
+            <span className="text-3xl font-black">{stagingCount}</span>
+            <span className="text-xs font-medium text-purple-400">QA / Internal</span>
+          </div>
+        </div>
+
+        <div className={`p-5 rounded-3xl border transition-all duration-300 ${cardBgClass}`}>
+          <div className="flex items-center justify-between">
+            <span className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+              Platforms (Android / iOS)
             </span>
             <div className="p-2.5 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-              <Smartphone className="h-4 w-4" />
+              <Smartphone className="h-5 w-5" />
             </div>
           </div>
-          <div className="text-2xl font-black mt-2 text-emerald-600 dark:text-emerald-400">
-            {androidCount}
+          <div className="mt-3 flex items-baseline space-x-2">
+            <span className="text-3xl font-black">{androidCount}</span>
+            <span className="text-xs font-medium text-slate-400">/ {iosCount} iOS</span>
           </div>
-          <span className="text-[11px] font-semibold text-slate-400 mt-1 block">
-            Android updates published
-          </span>
         </div>
 
-        <div
-          className={`p-5 rounded-3xl border transition-all duration-300 ${cardBgClass}`}
-        >
+        <div className={`p-5 rounded-3xl border transition-all duration-300 ${cardBgClass}`}>
           <div className="flex items-center justify-between">
             <span className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-              iOS Builds
+              Revoked (Kill-Switch)
             </span>
-            <div className="p-2.5 rounded-2xl bg-blue-500/15 text-blue-600 dark:text-blue-400">
-              <Apple className="h-4 w-4" />
+            <div className="p-2.5 rounded-2xl bg-rose-500/15 text-rose-600 dark:text-rose-400">
+              <ShieldAlert className="h-5 w-5" />
             </div>
           </div>
-          <div className="text-2xl font-black mt-2 text-blue-600 dark:text-blue-400">
-            {iosCount}
+          <div className="mt-3 flex items-baseline space-x-2">
+            <span className="text-3xl font-black">{revokedCount}</span>
+            <span className="text-xs font-medium text-rose-400">safe rollbacks</span>
           </div>
-          <span className="text-[11px] font-semibold text-slate-400 mt-1 block">
-            iOS updates published
-          </span>
-        </div>
-
-        <div
-          className={`p-5 rounded-3xl border transition-all duration-300 ${cardBgClass}`}
-        >
-          <div className="flex items-center justify-between">
-            <span className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-              Mandatory Pushes
-            </span>
-            <div className="p-2.5 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
-              <AlertTriangle className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="text-2xl font-black mt-2 text-amber-600 dark:text-amber-400">
-            {mandatoryCount}
-          </div>
-          <span className="text-[11px] font-semibold text-slate-400 mt-1 block">
-            Enforced hotfix updates
-          </span>
         </div>
       </div>
 
-      {/* Main Table Card */}
-      <div className={`rounded-3xl border p-6 sm:p-8 relative overflow-hidden transition-all duration-300 ${cardBgClass}`}>
-        {/* Top Header & Search Bar */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8">
-          <div className="flex items-center space-x-3.5">
-            <div className="p-3.5 rounded-2xl bg-gradient-to-tr from-cyan-500 via-blue-600 to-indigo-600 text-white shadow-xl shadow-cyan-500/30 shrink-0">
-              <History className="h-6 w-6" />
-            </div>
-            <div>
-              <div className="flex items-center space-x-2.5">
-                <h2 className={`text-xl sm:text-2xl font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  Release History & Rollbacks
-                </h2>
-                <span
-                  className={`px-3 py-0.5 rounded-full text-xs font-mono font-bold ${
-                    isDark
-                      ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30'
-                      : 'bg-cyan-50 text-cyan-700 border border-cyan-200'
-                  }`}
-                >
-                  {history.length} {history.length === 1 ? 'Release' : 'Releases'}
-                </span>
-              </div>
-              <p className={`text-xs sm:text-sm mt-0.5 font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                Complete audit trail of all published Over-The-Air bundles with 1-click instant rollback.
-              </p>
-            </div>
-          </div>
-
-          {/* Search & Platform Filter Toolbar */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            {/* Search Input */}
-            <div className="relative flex-1 sm:w-72">
-              <Search className={`absolute left-3.5 top-3 h-4 w-4 ${isDark ? 'text-slate-500' : 'text-slate-400'}`} />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search version, notes, hash..."
-                className={`w-full pl-10 pr-4 py-2.5 rounded-2xl text-xs font-semibold border outline-none transition-all ${
-                  isDark
-                    ? 'bg-slate-950/90 border-slate-800 text-white placeholder-slate-500 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20'
-                    : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 shadow-2xs'
-                }`}
-              />
-            </div>
-
-            {/* Filter Pills */}
-            <div
-              className={`flex p-1 rounded-2xl border text-xs font-bold ${
-                isDark ? 'bg-slate-950/90 border-slate-800' : 'bg-slate-100 border-slate-200'
-              }`}
-            >
-              <button
-                type="button"
-                onClick={() => setPlatformFilter('all')}
-                className={`px-3.5 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
-                  platformFilter === 'all'
-                    ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-sm'
-                    : isDark
-                    ? 'text-slate-400 hover:text-white'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                All
-              </button>
-              <button
-                type="button"
-                onClick={() => setPlatformFilter('android')}
-                className={`px-3.5 py-1.5 rounded-xl font-bold flex items-center space-x-1.5 transition-all cursor-pointer ${
-                  platformFilter === 'android'
-                    ? 'bg-emerald-500 text-white shadow-sm'
-                    : isDark
-                    ? 'text-slate-400 hover:text-white'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Smartphone className="h-3.5 w-3.5" />
-                <span>Android</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setPlatformFilter('ios')}
-                className={`px-3.5 py-1.5 rounded-xl font-bold flex items-center space-x-1.5 transition-all cursor-pointer ${
-                  platformFilter === 'ios'
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : isDark
-                    ? 'text-slate-400 hover:text-white'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Apple className="h-3.5 w-3.5" />
-                <span>iOS</span>
-              </button>
-            </div>
-          </div>
+      {/* Filter and Search Bar */}
+      <div className={`p-4 sm:p-5 rounded-3xl border ${cardBgClass} flex flex-col md:flex-row md:items-center justify-between gap-4`}>
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by version, hash, or release notes..."
+            className={`w-full pl-10 pr-4 py-2 rounded-xl text-xs font-medium border ${
+              isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
+            }`}
+          />
         </div>
 
-        {/* Release History Table or Empty State */}
-        {filteredHistory.length === 0 ? (
-          <div
-            className={`rounded-3xl border p-12 text-center flex flex-col items-center justify-center space-y-4 ${
-              isDark ? 'bg-slate-950/50 border-slate-800/80' : 'bg-slate-50/80 border-slate-200'
-            }`}
-          >
-            <div
-              className={`p-4 rounded-3xl ${
-                isDark ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' : 'bg-cyan-50 text-cyan-700 border border-cyan-200'
-              }`}
-            >
-              <Layers className="h-10 w-10" />
-            </div>
-            <div className="max-w-md space-y-1">
-              <h3 className={`text-base font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                {history.length === 0 ? 'No OTA Releases Published Yet' : 'No Matching Releases Found'}
-              </h3>
-              <p className={`text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                {history.length === 0
-                  ? 'Head over to the Publish Update tab to upload your React Native bundle and deploy your first release.'
-                  : 'Try adjusting your search query or platform filter criteria.'}
-              </p>
-            </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Track Filter */}
+          <div className={`flex p-1 rounded-2xl border text-xs font-bold ${isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
+            {(['all', 'production', 'staging'] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTrackFilter(t)}
+                className={`px-3 py-1.5 rounded-xl uppercase font-mono font-bold text-xs transition-all cursor-pointer ${
+                  trackFilter === t
+                    ? t === 'staging' ? 'bg-purple-600 text-white shadow-sm' : 'bg-cyan-500 text-white shadow-sm'
+                    : isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {t}
+              </button>
+            ))}
           </div>
-        ) : (
-          <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr
-                  className={`border-b uppercase font-mono text-[10px] font-extrabold tracking-wider ${
-                    isDark
-                      ? 'border-slate-800 text-slate-400 bg-slate-950'
-                      : 'border-slate-200 text-slate-500 bg-slate-50/90'
-                  }`}
-                >
-                  <th className="py-4 px-5">Platform</th>
-                  <th className="py-4 px-5">Bundle Version</th>
-                  <th className="py-4 px-5">SHA256 Checksum</th>
-                  <th className="py-4 px-5">Policy</th>
-                  <th className="py-4 px-5">Release Notes</th>
-                  <th className="py-4 px-5">Published Date</th>
-                  <th className="py-4 px-5 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className={`divide-y ${isDark ? 'divide-slate-800/80' : 'divide-slate-100'}`}>
-                {filteredHistory.map((item) => {
-                  const isAndroid = item.platform === 'android';
 
-                  return (
-                    <tr
-                      key={item.id}
-                      className={`transition-colors duration-150 ${
-                        isDark
-                          ? 'hover:bg-slate-800/50 bg-slate-900/40'
-                          : 'hover:bg-slate-50/80 bg-white'
-                      }`}
-                    >
-                      {/* Platform */}
-                      <td className="py-4 px-5">
-                        <span
-                          className={`inline-flex items-center space-x-1.5 px-3 py-1 rounded-xl text-xs font-bold border ${
-                            isAndroid
-                              ? isDark
-                                ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
-                                : 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                              : isDark
-                              ? 'bg-blue-500/15 border-blue-500/30 text-blue-400'
-                              : 'bg-blue-50 border-blue-200 text-blue-700'
-                          }`}
-                        >
+          {/* Platform Filter */}
+          <div className={`flex p-1 rounded-2xl border text-xs font-bold ${isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
+            {(['all', 'android', 'ios'] as const).map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setPlatformFilter(p)}
+                className={`px-3 py-1.5 rounded-xl uppercase font-mono font-bold text-xs transition-all cursor-pointer ${
+                  platformFilter === p
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Main Table */}
+      <div className={`rounded-3xl border overflow-hidden ${cardBgClass}`}>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className={`border-b text-xs font-bold uppercase tracking-wider ${isDark ? 'border-slate-800 bg-slate-950 text-slate-400' : 'border-slate-200 bg-slate-50 text-slate-600'}`}>
+                <th className="py-3.5 px-4">Platform & Track</th>
+                <th className="py-3.5 px-4">Version & Rollout</th>
+                <th className="py-3.5 px-4">Target Binary</th>
+                <th className="py-3.5 px-4">Release Notes</th>
+                <th className="py-3.5 px-4">Published Date</th>
+                <th className="py-3.5 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className={`divide-y ${isDark ? 'divide-slate-800/80' : 'divide-slate-100'}`}>
+              {filteredHistory.map((item) => {
+                const isAndroid = item.platform === 'android';
+                const isStaging = item.track === 'staging';
+
+                return (
+                  <tr key={item.id} className={isDark ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50/80'}>
+                    {/* Platform & Track */}
+                    <td className="py-3.5 px-4 whitespace-nowrap">
+                      <div className="flex items-center space-x-2">
+                        <span className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-xl text-xs font-bold border ${
+                          isAndroid
+                            ? isDark ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                            : isDark ? 'bg-blue-500/15 border-blue-500/30 text-blue-400' : 'bg-blue-50 border-blue-200 text-blue-700'
+                        }`}>
                           {isAndroid ? <Smartphone className="h-3.5 w-3.5" /> : <Apple className="h-3.5 w-3.5" />}
                           <span className="capitalize">{item.platform}</span>
                         </span>
-                      </td>
 
-                      {/* Version */}
-                      <td className="py-4 px-5">
-                        <div className="flex items-center space-x-1.5">
-                          <span className={`font-mono text-sm font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                            v{item.version}
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* SHA256 Hash */}
-                      <td className="py-4 px-5 font-mono">
-                        <button
-                          type="button"
-                          onClick={() => copyHash(item.hash, item.id)}
-                          className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-xl border text-[11px] font-bold transition-all cursor-pointer ${
-                            copiedHashId === item.id
-                              ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
-                              : isDark
-                              ? 'bg-slate-950/80 border-slate-800 hover:border-cyan-500/40 text-cyan-400'
-                              : 'bg-slate-50 border-slate-200 hover:border-cyan-400 text-cyan-800'
-                          }`}
-                          title="Click to copy full SHA256 checksum"
-                        >
-                          <Hash className="h-3 w-3 text-cyan-600 dark:text-cyan-400" />
-                          <span>{item.hash.substring(0, 8)}...</span>
-                          {copiedHashId === item.id ? (
-                            <Check className="h-3 w-3 text-emerald-500" />
-                          ) : (
-                            <Copy className="h-3 w-3 opacity-60" />
-                          )}
-                        </button>
-                      </td>
-
-                      {/* Mandatory / Optional Policy */}
-                      <td className="py-4 px-5">
-                        <span
-                          className={`inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
-                            item.mandatory
-                              ? isDark
-                                ? 'bg-amber-500/15 border-amber-500/30 text-amber-400'
-                                : 'bg-amber-50 border-amber-200 text-amber-800'
-                              : isDark
-                              ? 'bg-slate-800 border-slate-700 text-slate-300'
-                              : 'bg-slate-100 border-slate-200 text-slate-700'
-                          }`}
-                        >
-                          {item.mandatory ? (
-                            <AlertTriangle className="h-3 w-3 text-amber-500" />
-                          ) : (
-                            <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                          )}
-                          <span>{item.mandatory ? 'Mandatory' : 'Optional'}</span>
+                        <span className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase border ${
+                          isStaging
+                            ? 'bg-purple-500/15 border-purple-500/30 text-purple-400'
+                            : 'bg-cyan-500/15 border-cyan-500/30 text-cyan-400'
+                        }`}>
+                          {isStaging ? 'Staging' : 'Production'}
                         </span>
-                      </td>
+                      </div>
+                    </td>
 
-                      {/* Release Notes */}
-                      <td
-                        className={`py-4 px-5 max-w-xs truncate font-medium ${
-                          isDark ? 'text-slate-300' : 'text-slate-700'
-                        }`}
-                        title={item.releaseNotes}
-                      >
-                        {item.releaseNotes || 'No notes provided'}
-                      </td>
-
-                      {/* Published Date */}
-                      <td className={`py-4 px-5 whitespace-nowrap font-medium text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                        <div className="flex items-center space-x-1.5">
-                          <Calendar className="h-3.5 w-3.5 opacity-60" />
-                          <span>
-                            {new Date(item.createdAt).toLocaleDateString(undefined, {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* Actions */}
-                      <td className="py-4 px-5 text-right">
-                        <div className="inline-flex items-center space-x-2">
-                          {/* View Details Button */}
-                          <button
-                            type="button"
-                            onClick={() => handleView(item)}
-                            className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-white bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 shadow-md shadow-cyan-500/20 transition-all hover:scale-105 active:scale-95 cursor-pointer flex items-center space-x-1.5 shrink-0"
-                            title={`View full release details & timeline for v${item.version}`}
+                    {/* Version, Rollout %, & Badges */}
+                    <td className="py-3.5 px-4 whitespace-nowrap">
+                      <div className="flex items-center space-x-2">
+                        {item.revoked && (
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center space-x-1 ${
+                              item.autoRevoked
+                                ? 'bg-rose-500/30 text-rose-300 border border-rose-500/80 animate-pulse shadow-md shadow-rose-500/20'
+                                : 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
+                            }`}
+                            title={item.revocationReason || 'Release revoked'}
                           >
-                            <Eye className="h-3.5 w-3.5" />
-                            <span>View</span>
-                          </button>
+                            <span>{item.autoRevoked ? '⚡ CIRCUIT BREAKER' : 'REVOKED'}</span>
+                          </span>
+                        )}
+                        {item.rolloutPercentage && item.rolloutPercentage < 100 && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 border border-amber-500/30 text-amber-400">
+                            Canary {item.rolloutPercentage}%
+                          </span>
+                        )}
+                        {item.mandatory && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 border border-amber-500/30 text-amber-400">
+                            Mandatory
+                          </span>
+                        )}
+                        {item.signature && (
+                          <span
+                            className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center space-x-1"
+                            title={`Detached signature: ${item.signature}`}
+                          >
+                            <span>🔐 Ed25519</span>
+                          </span>
+                        )}
+                        {item.driftStatus === 'passed' && (
+                          <span
+                            className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-400"
+                            title="Native ABI verified against target binary"
+                          >
+                            ABI Safe
+                          </span>
+                        )}
+                        {item.driftStatus === 'warning' && (
+                          <span
+                            className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/15 border border-amber-500/30 text-amber-400"
+                            title="Native Module Drift detected"
+                          >
+                            ABI Drift
+                          </span>
+                        )}
+                      </div>
+                    </td>
 
-                          {/* Rollback Button */}
+                    {/* Target Binary SemVer */}
+                    <td className="py-3.5 px-4 font-mono text-xs text-slate-400">
+                      {item.targetBinaryVersion || '1.0.0'}
+                    </td>
+
+                    {/* Release Notes */}
+                    <td className={`py-3.5 px-4 truncate max-w-xs md:max-w-md font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                      {item.releaseNotes || 'No notes provided'}
+                    </td>
+
+                    {/* Published Date */}
+                    <td className={`py-3.5 px-4 whitespace-nowrap text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                      {new Date(item.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </td>
+
+                    {/* Actions */}
+                    <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                      <div className="inline-flex items-center justify-end space-x-1.5">
+                        {/* 1-Click Promote Staging to Production */}
+                        {isStaging && onPromote && (
                           <button
                             type="button"
                             onClick={() =>
                               setConfirmModal({
                                 isOpen: true,
-                                title: `Rollback ${item.platform.toUpperCase()} Release`,
-                                message: `Are you sure you want to revert the active ${item.platform.toUpperCase()} production bundle to v${item.version}?`,
-                                confirmLabel: 'Confirm Rollback',
-                                variant: 'warning',
-                                onConfirm: () => onRollback(item),
+                                title: `Promote v${item.version} to Production`,
+                                message: `Promote staging release v${item.version} to the public Production track?`,
+                                confirmLabel: 'Promote to Production',
+                                variant: 'info',
+                                onConfirm: () => onPromote(item),
                               })
                             }
-                            className={`p-2 rounded-xl transition-all hover:scale-105 active:scale-95 cursor-pointer border ${
-                              isDark
-                                ? 'text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30'
-                                : 'text-amber-700 bg-amber-50 hover:bg-amber-100 border-amber-200'
-                            }`}
-                            title={`Rollback active release to v${item.version}`}
+                            className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 cursor-pointer flex items-center space-x-1"
+                            title="Promote to Production track"
                           >
-                            <RotateCcw className="h-4 w-4" />
+                            <ArrowUpRight className="h-3.5 w-3.5" />
+                            <span>Promote</span>
                           </button>
+                        )}
 
-                          {/* Delete Record Button */}
-                          {onDelete && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setConfirmModal({
-                                  isOpen: true,
-                                  title: `Delete ${item.platform.toUpperCase()} Release Record`,
-                                  message: `Are you sure you want to permanently delete the ${item.platform.toUpperCase()} v${item.version} release entry from Firebase Firestore?`,
-                                  confirmLabel: 'Delete Record',
-                                  variant: 'danger',
-                                  onConfirm: () => onDelete(item.id),
-                                })
-                              }
-                              className={`p-2 rounded-xl transition-all hover:scale-105 active:scale-95 cursor-pointer border ${
-                                isDark
-                              ? 'text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border-rose-500/30'
-                              : 'text-rose-700 bg-rose-50 hover:bg-rose-100 border-rose-200'
-                              }`}
-                              title={`Delete v${item.version} record`}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                        {/* View Button */}
+                        <button
+                          type="button"
+                          onClick={() => handleView(item)}
+                          className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 cursor-pointer flex items-center space-x-1"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          <span>View</span>
+                        </button>
+
+                        {/* Rollback Button */}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setConfirmModal({
+                              isOpen: true,
+                              title: `Rollback ${item.platform.toUpperCase()} Release`,
+                              message: `Revert active production bundle to v${item.version}?`,
+                              confirmLabel: 'Confirm Rollback',
+                              variant: 'warning',
+                              onConfirm: () => onRollback(item),
+                            })
+                          }
+                          className="p-1.5 rounded-xl border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 cursor-pointer"
+                          title="Rollback to this version"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                        </button>
+
+                        {/* Emergency Revoke Kill-Switch */}
+                        {!item.revoked && onRevoke && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setConfirmModal({
+                                isOpen: true,
+                                title: `🚨 Emergency Revoke v${item.version}`,
+                                message: `Are you sure you want to revoke release v${item.version}? Connected devices will immediately purge this bundle and revert to factory baseline assets!`,
+                                confirmLabel: 'Emergency Revoke Release',
+                                variant: 'danger',
+                                onConfirm: () => onRevoke(item),
+                              })
+                            }
+                            className="p-1.5 rounded-xl border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 cursor-pointer"
+                            title="Emergency Kill-Switch (Revoke)"
+                          >
+                            <ShieldAlert className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+
+                        {/* Delete Button */}
+                        {onDelete && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setConfirmModal({
+                                isOpen: true,
+                                title: `Delete Release Record`,
+                                message: `Permanently delete v${item.version} release record?`,
+                                confirmLabel: 'Delete Record',
+                                variant: 'danger',
+                                onConfirm: () => onDelete(item.id),
+                              })
+                            }
+                            className="p-1.5 rounded-xl border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 cursor-pointer"
+                            title="Delete Record"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* Confirmation Modal Component */}
+      {/* Confirmation Modal */}
       <ConfirmModal
         isOpen={confirmModal.isOpen}
         title={confirmModal.title}
         message={confirmModal.message}
         confirmLabel={confirmModal.confirmLabel}
         variant={confirmModal.variant}
-        onConfirm={confirmModal.onConfirm}
+        onConfirm={() => {
+          confirmModal.onConfirm();
+          setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        }}
         onClose={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
         theme={theme}
       />
 
-      {/* Full Release Details & Realtime Timeline Modal Component */}
-      <ReleaseDetailModal
-        isOpen={!!selectedDetailRelease}
-        item={selectedDetailRelease}
-        onClose={() => setSelectedDetailRelease(null)}
-        theme={theme}
-      />
+      {/* Detail Modal */}
+      {selectedDetailRelease && (
+        <ReleaseDetailModal
+          isOpen={Boolean(selectedDetailRelease)}
+          item={selectedDetailRelease}
+          onClose={() => setSelectedDetailRelease(null)}
+          theme={theme}
+        />
+      )}
     </div>
   );
 };

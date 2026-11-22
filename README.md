@@ -1,75 +1,72 @@
-# React + TypeScript + Vite
+# 🚀 CodePush Enterprise Platform
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+> **Zero-Downtime Over-The-Air (OTA) Updates & Real-Time Push Notification Engine**  
+> Designed for high-scale React Native mobile applications on Android & iOS. Built with React 19, TypeScript, Vite, TailwindCSS, Firebase RTDB/Auth, Netlify Edge Functions, and Hermes HBC Bytecode.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 📑 Core Documentation Index
 
-## React Compiler
+| Document | Purpose & Description |
+| :--- | :--- |
+| 📱 [**Client Integration Guide**](./docs/REACT_NATIVE_INTEGRATION.md) | Click-by-click setup for React Native apps, Hermes compiler, Boot Loop Watchdog, Push Notifications, and CLI deployment. |
+| 🧪 [**Master Manual QA Playbook**](../MANUAL_TESTING_DOCUMENTATION.md) | Exhaustive 20-feature testing playbook with step-by-step UI actions, terminal verification commands, and sign-off matrix. |
+| 📋 [**Codebase Audit & Roadmap**](../codepush_codebase_audit_and_next_features.md) | Architectural audit of all 12 implemented components and in-depth breakdown of next-gen features. |
+| 🗺️ [**Product Feature Recommendations**](../FEATURE_RECOMMENDATIONS.md) | Deep dive into phased enterprise reliability, Canary hashing, circuit breakers, and delta patches. |
+| 🤖 [**Android Production & APK Guide**](./docs/PRODUCTION_GUIDE.md) | Building standalone APKs, signing keys, and Google Play Store AAB bundles. |
+| 📶 [**Wi-Fi Debugging Guide**](./docs/WIFI_DEBUGGING.md) | Wireless ADB pairing and on-device live testing. |
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the ESLint configuration
+## ⚡ Key Platform Capabilities
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+1. **Zero-Downtime Silent OTA Distribution**: Download and apply bundles seamlessly in the background with zero user interruption.
+2. **Deterministic Canary / Phased Rollouts**: Staged rollouts (`5%` ➔ `25%` ➔ `50%` ➔ `100%`) using CRC32 device cohort hashing.
+3. **Automated Boot Loop Crash Guard**: 5-second survival watchdog that automatically reverts to factory APK baseline on 3 startup crashes.
+4. **Automated Crash Circuit Breaker**: Disconnects broken bundles and triggers autonomous rollback when crash thresholds are exceeded.
+5. **Source Map Stack Trace Symbolication**: Upload `.map` files to de-minify production crash traces back to original TypeScript lines.
+6. **Hermes Bytecode Pre-Flight Validator**: Inspects binary magic header `0x1F55C0DE` before ingestion to prevent white-screen crashes.
+7. **Emergency Instant Kill-Switch**: 1-click global revocation flag that immediately blocks and rolls back compromised releases.
+8. **Multi-Track Promotion**: Separate `Staging` (internal QA) and `Production` (live fleet) with 1-click instant promotion.
+9. **Dynamic Remote Config**: Real-time key-value feature flags and parameters updated instantly via Firebase RTDB.
+10. **High-Priority FCM v1 Push Notifications**: Instant native banner dispatch with custom sound channels (`crystal_glass`, `electronic_pulse`, etc.) and deep linking.
+11. **Developer CLI Tool (`@codepush/cli`)**: Terminal utility (`npx codepush`) for packaging, publishing, promoting, and rolling back.
+12. **Team Collaboration Webhooks**: Automated deployment cards dispatched to Slack and Discord channels.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+---
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## 🛠️ Quick Local Development Setup
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### 1. Start the CodePush Web Console
+```bash
+cd "k:\Projects\codepush project\codepush"
+npm install
+npm run dev
+```
+Open **[http://localhost:5173](http://localhost:5173)** in your browser.
 
+### 2. Developer CLI Commands
+```bash
+# Login with your project API Key
+npx codepush login --key cp_live_e93847a98b2c1d0e
+
+# Deploy bundle to Staging
+npx codepush release-react -a app_rCYp1a_mvdfs5j4_w9dyc -p android -t staging -m "Hotfix v1.0.1"
+
+# Promote to Production
+npx codepush promote -a app_rCYp1a_mvdfs5j4_w9dyc -p android -s staging -d production
+
+# Emergency Rollback
+npx codepush rollback -a app_rCYp1a_mvdfs5j4_w9dyc -p android
+
+# View Current Release Status
+npx codepush status -a app_rCYp1a_mvdfs5j4_w9dyc
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+---
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 🌐 Production Deployment Architecture
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
-```
+* **Web Console & Edge Functions**: Netlify (`https://codepushs.netlify.app`)
+* **Realtime State & Telemetry**: Firebase Realtime Database (`asia-southeast1`)
+* **Storage & Bundles**: Netlify Blobs & Firebase Storage

@@ -19,10 +19,15 @@ import {
   User as UserIcon,
   Sparkles,
   Zap,
+  Radio,
+  Eye,
+  EyeOff,
+  Code2,
 } from 'lucide-react';
 import type { Project } from '../types';
 import { ConfirmModal } from './ConfirmModal';
 import { FirebaseStatusIndicator } from './FirebaseStatusIndicator';
+import { ConnectAppModal } from './ConnectAppModal';
 
 interface TopHeaderProps {
   onToggleSidebar: () => void;
@@ -40,6 +45,7 @@ interface TopHeaderProps {
   onSignOut?: () => void;
   onNavigateToProfile?: () => void;
   onNavigateToDocs?: () => void;
+  onNavigateToIntegration?: () => void;
   activeProject?: Project;
   onOpenEditProjectModal?: () => void;
 }
@@ -55,13 +61,16 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   onSignOut,
   onNavigateToProfile,
   onNavigateToDocs,
+  onNavigateToIntegration,
   activeProject,
   onOpenEditProjectModal,
 }) => {
   const [currentTime, setCurrentTime] = useState<string>('');
   const [isSpinning, setIsSpinning] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [showAppId, setShowAppId] = useState(false);
   const [isSignOutConfirmOpen, setIsSignOutConfirmOpen] = useState(false);
+  const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -103,8 +112,12 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
     dashboard: { label: 'Dashboard Overview', icon: Layers },
     publish: { label: 'Publish OTA Update', icon: UploadCloud },
     history: { label: 'Release History & Rollbacks', icon: History },
+    testing: { label: 'Live Testing & Endpoint Simulator', icon: Radio },
     profile: { label: 'Profile & API Keys', icon: KeyRound },
-    docs: { label: 'Integration Documentation', icon: BookOpen },
+    docs: { label: 'Documentation', icon: BookOpen },
+    integration: { label: 'SDK Integration', icon: Code2 },
+    'remote-config': { label: 'Remote Config & Feature Flags', icon: Sparkles },
+    crashes: { label: 'Crash Analytics', icon: ShieldCheck },
   };
 
   const isDark = theme === 'dark';
@@ -177,10 +190,26 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         </div>
       </div>
 
-      {/* Right Section: Firebase Status, Time, Theme Switcher, Notifications, User Profile */}
+      {/* Right Section: Firebase Status, Connect App, Time, Theme Switcher, Notifications, User Profile */}
       <div className="flex items-center space-x-2.5 sm:space-x-3.5">
         {/* Firebase Connected Status */}
         <FirebaseStatusIndicator theme={theme} />
+
+        {/* ⚡ Quick Connect App (.json) Button */}
+        <button
+          type="button"
+          onClick={() => setIsConnectModalOpen(true)}
+          className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all active:scale-95 cursor-pointer shadow-xs ${
+            isDark
+              ? 'bg-gradient-to-r from-cyan-500/20 via-blue-600/20 to-indigo-600/20 hover:from-cyan-500/30 hover:to-blue-600/30 text-cyan-300 border border-cyan-500/40 hover:border-cyan-400/60'
+              : 'bg-gradient-to-r from-cyan-500/15 via-blue-600/10 to-indigo-600/10 hover:from-cyan-500/25 hover:to-blue-600/20 text-blue-700 border border-blue-300 hover:border-blue-400 shadow-2xs'
+          }`}
+          title="Connect Mobile App using codepush.json (Firebase-style 1-click)"
+        >
+          <Zap className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+          <span className="hidden sm:inline">Connect App</span>
+         
+        </button>
 
         {/* Live Clock Pill with Status Pulse */}
         <div
@@ -369,9 +398,19 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                     <Folder className={`h-3.5 w-3.5 ${isDark ? 'text-cyan-400' : 'text-cyan-600'} shrink-0`} />
                     <span className={`font-black truncate ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>{activeProject.name}</span>
                   </div>
-                  <span className={`text-[10px] font-mono font-bold shrink-0 pl-2 ${isDark ? 'text-cyan-400' : 'text-cyan-700'}`}>
-                    {activeProject.id}
-                  </span>
+                  <div className="flex items-center space-x-1.5 shrink-0 pl-2">
+                    <span className={`text-[10px] font-mono font-bold ${isDark ? 'text-cyan-400' : 'text-cyan-700'}`}>
+                      {showAppId ? activeProject.id : '••••••••••••••••'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowAppId(!showAppId)}
+                      className="p-1 rounded text-slate-400 hover:text-cyan-400 transition-colors cursor-pointer"
+                      title={showAppId ? "Hide App ID" : "Reveal App ID"}
+                    >
+                      {showAppId ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -434,12 +473,45 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                         <BookOpen className="h-4 w-4" />
                       </div>
                       <div>
-                        <div className={`text-xs font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>Integration Docs</div>
+                        <div className={`text-xs font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>Documentation</div>
                         <div className={`text-[10px] font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Mobile SDK & CI/CD guides</div>
                       </div>
                     </div>
 
                     <ChevronRight className={`h-4 w-4 ${isDark ? 'text-slate-500' : 'text-slate-400'} group-hover:text-indigo-500 group-hover:translate-x-0.5 transition-transform`} />
+                  </button>
+                )}
+
+                {onNavigateToIntegration && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowUserDropdown(false);
+                      onNavigateToIntegration();
+                    }}
+                    className={`w-full flex items-center justify-between p-2 rounded-2xl border border-transparent transition-all cursor-pointer group text-left ${
+                      isDark
+                        ? 'hover:bg-slate-800/80 hover:border-slate-700/60 text-slate-200 hover:text-white'
+                        : 'hover:bg-slate-100 hover:border-slate-200 text-slate-800 hover:text-slate-900'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div
+                        className={`p-2 rounded-xl transition-all group-hover:scale-105 border ${
+                          isDark
+                            ? 'bg-cyan-500/15 border-cyan-500/30 text-cyan-400 group-hover:bg-cyan-500 group-hover:text-white'
+                            : 'bg-cyan-50 border-cyan-200 text-cyan-700 group-hover:bg-cyan-600 group-hover:text-white'
+                        }`}
+                      >
+                        <Code2 className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <div className={`text-xs font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>SDK Integration</div>
+                        <div className={`text-[10px] font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Code setup & codepush.json</div>
+                      </div>
+                    </div>
+
+                    <ChevronRight className={`h-4 w-4 ${isDark ? 'text-slate-500' : 'text-slate-400'} group-hover:text-cyan-500 group-hover:translate-x-0.5 transition-transform`} />
                   </button>
                 )}
 
@@ -495,6 +567,14 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
           )}
         </div>
       </div>
+
+      {/* Connect App 1-Click Modal */}
+      <ConnectAppModal
+        isOpen={isConnectModalOpen}
+        onClose={() => setIsConnectModalOpen(false)}
+        activeProject={activeProject}
+        theme={theme}
+      />
 
       {/* Sign Out Confirmation Modal */}
       {onSignOut && (

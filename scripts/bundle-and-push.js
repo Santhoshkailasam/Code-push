@@ -3,10 +3,13 @@
  * Usage: node scripts/bundle-and-push.js --platform=android --version=1.0.1
  */
 
-const { execSync } = require('child_process');
-const fs = require('fs');
-const path = require('path');
-const crypto = require('crypto');
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const args = process.argv.slice(2).reduce((acc, arg) => {
   const [key, val] = arg.replace(/^--/, '').split('=');
@@ -41,7 +44,18 @@ try {
   console.log(`✅ Bundle created successfully.`);
   console.log(`🔑 SHA256 Hash: ${hexHash}`);
   console.log(`📦 Bundle File: ${bundlePath}`);
-  console.log(`✨ Ready to upload to Netlify Dashboard!`);
+
+  // Step 3: Create assets folder simulation
+  const assetsDir = path.join(outputDir, 'assets');
+  const localesDir = path.join(outputDir, 'locales');
+  if (!fs.existsSync(assetsDir)) fs.mkdirSync(assetsDir, { recursive: true });
+  if (!fs.existsSync(localesDir)) fs.mkdirSync(localesDir, { recursive: true });
+
+  fs.writeFileSync(path.join(localesDir, 'en.json'), JSON.stringify({ welcome: 'Hello', version }));
+  fs.writeFileSync(path.join(localesDir, 'es.json'), JSON.stringify({ welcome: 'Hola', version }));
+
+  console.log(`🌐 Packaged 2 localization files (en, es).`);
+  console.log(`✨ Package ready for upload or CLI deployment!`);
 
 } catch (err) {
   console.error(`❌ Bundling failed:`, err);

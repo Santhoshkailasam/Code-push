@@ -1,4 +1,5 @@
 const { getReleaseData, setReleaseData } = require('./store.cjs');
+const { resolveCountry } = require('./geoResolver.cjs');
 
 exports.handler = async (event) => {
   const headers = {
@@ -34,6 +35,7 @@ exports.handler = async (event) => {
     }
 
     const { platform, version, action, device, apiKey, projectId } = payload;
+    const detectedCountry = resolveCountry(event, event.queryStringParameters || {}, payload);
 
     const newPing = {
       id: `ping_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -41,6 +43,7 @@ exports.handler = async (event) => {
       date: new Date().toISOString(),
       platform: platform || 'android',
       device: device || (platform === 'ios' ? 'iPhone Mobile Phone' : 'Android Mobile Phone'),
+      country: String(detectedCountry).toUpperCase(),
       version: version || '1.0.0',
       action: action || 'Mobile app checked for updates',
       apiKey: apiKey || 'default',

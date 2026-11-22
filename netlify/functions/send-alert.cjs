@@ -1,10 +1,11 @@
 const { getReleaseData, setReleaseData } = require('./store.cjs');
+const { extractApiKey, verifyApiKey } = require('./auth.cjs');
 
 exports.handler = async (event) => {
   const headers = {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-codepush-api-key',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-codepush-api-key, x-api-key',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   };
 
@@ -13,6 +14,27 @@ exports.handler = async (event) => {
   }
 
   try {
+    let parsedBody = {};
+    if (event.body) {
+      try {
+        parsedBody = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
+      } catch (e) {
+        parsedBody = {};
+      }
+    }
+
+    const requestedProjectId =
+      event.queryStringParameters?.projectId || parsedBody.projectId || null;
+    const apiKey = extractApiKey(event, parsedBody);
+    const auth = await verifyApiKey(apiKey, requestedProjectId);
+    if (!auth.valid) {
+      return {
+        statusCode: auth.statusCode,
+        headers,
+        body: JSON.stringify({ error: auth.error }),
+      };
+    }
+
     const store = await getReleaseData();
     if (!store.alerts) store.alerts = {};
 
@@ -66,7 +88,8 @@ exports.handler = async (event) => {
       payload = event.body;
     }
 
-    const { message, title, projectId, platform, apiKey, type, isGlobal, targetAppOnly } = payload;
+    const { message, title, projectId: payloadProjectId, platform, type, isGlobal, targetAppOnly } = payload;
+    const projectId = payloadProjectId || auth.projectId || null;
 
     if (!message || !message.trim()) {
       return {

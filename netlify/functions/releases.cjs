@@ -1,58 +1,72 @@
 const { getReleaseData } = require('./store.cjs');
+const { extractApiKey, verifyApiKey } = require('./auth.cjs');
 
 exports.handler = async (event) => {
+  const headers = {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-codepush-api-key, x-api-key',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  };
+
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 200, headers, body: JSON.stringify({ message: 'OK' }) };
+  }
+
   const method = event.httpMethod;
 
   if (method === 'GET') {
-    const store = await getReleaseData();
-    const apiKey = (event.queryStringParameters ? event.queryStringParameters.apiKey : null) || event.headers['x-codepush-api-key'] || event.headers['x-api-key'];
-    const userId = (event.queryStringParameters ? event.queryStringParameters.userId : null) || event.headers['x-user-id'];
-
-    if (apiKey || userId) {
-      let scopedStore = { ...store };
-
-      if (apiKey && store.keys && store.keys[apiKey]) {
-        if (store.keys[apiKey].android) scopedStore.android = store.keys[apiKey].android;
-        if (store.keys[apiKey].ios) scopedStore.ios = store.keys[apiKey].ios;
-      } else if (userId && store.users && store.users[userId]) {
-        if (store.users[userId].android) scopedStore.android = store.users[userId].android;
-        if (store.users[userId].ios) scopedStore.ios = store.users[userId].ios;
-      }
-
-      if (store.history) {
-        scopedStore.history = store.history.filter((item) => {
-          if (userId && item.userId === userId) return true;
-          if (apiKey && item.apiKey === apiKey) return true;
-          return false;
-        });
-      }
-
+    const requestedProjectId = event.queryStringParameters?.projectId || null;
+    const apiKey = extractApiKey(event);
+    const auth = await verifyApiKey(apiKey, requestedProjectId);
+    if (!auth.valid) {
       return {
-        statusCode: 200,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify(scopedStore),
+        statusCode: auth.statusCode,
+        headers,
+        body: JSON.stringify({ error: auth.error }),
       };
     }
 
+    const store = await getReleaseData();
+    const effectiveProjectId = requestedProjectId || auth.projectId;
+
+    if (auth.isMaster && !effectiveProjectId) {
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify(store),
+      };
+    }
+
+    const scopedStore = {
+      projectId: effectiveProjectId,
+      android:
+        (store.keys?.[apiKey]?.android) ||
+        (effectiveProjectId && store.projects?.[effectiveProjectId]?.android) ||
+        null,
+      ios:
+        (store.keys?.[apiKey]?.ios) ||
+        (effectiveProjectId && store.projects?.[effectiveProjectId]?.ios) ||
+        null,
+      history: Array.isArray(store.history)
+        ? store.history.filter(
+            (item) =>
+              (apiKey && item.apiKey === apiKey) ||
+              (effectiveProjectId && item.projectId === effectiveProjectId)
+          )
+        : [],
+    };
+
     return {
       statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(store),
+      headers,
+      body: JSON.stringify(scopedStore),
     };
   }
 
   return {
     statusCode: 405,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    },
+    headers,
     body: JSON.stringify({ error: 'Method Not Allowed' }),
   };
 };

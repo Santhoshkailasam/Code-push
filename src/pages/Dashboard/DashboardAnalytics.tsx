@@ -603,6 +603,7 @@ export const DashboardAnalytics: React.FC<AnalyticsProps> = ({
           </div>
         </div>
       </div>
+
     </div>
   );
 };
