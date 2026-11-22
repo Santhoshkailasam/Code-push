@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "node ./scripts/inject-firebase-service-account.cjs && tsc -b && vite build",
     "cli": "node ./bin/codepush.mjs",
     "lint": "eslint .",
     "preview": "vite preview"

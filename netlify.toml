@@ -4,6 +4,11 @@
   publish = "dist"
   functions = "netlify/functions"
 
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+  included_files = ["netlify/functions/firebase-service-account.json"]
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
