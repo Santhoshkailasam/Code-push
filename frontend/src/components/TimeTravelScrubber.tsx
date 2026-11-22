@@ -7,12 +7,7 @@ import {
   ChevronRight,
   SkipBack,
   SkipForward,
-  Clock,
   Layers,
-  Activity,
-  AlertTriangle,
-  Compass,
-  CheckCircle2,
   X,
 } from 'lucide-react';
 import type { ReplayFrame } from '../services/StateRecorder';

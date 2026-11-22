@@ -5,14 +5,8 @@ import {
   CheckCircle2,
   AlertTriangle,
   X,
-  ArrowRight,
-  ShieldCheck,
-  Zap,
-  Activity,
   Trash2,
-  Code2,
   FileCode,
-  Layers,
 } from 'lucide-react';
 
 export interface AutoPatchData {

@@ -2,13 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   Radio,
   Wifi,
-  Share2,
-  HardDrive,
-  CheckCircle2,
-  ShieldCheck,
-  Zap,
-  ArrowDownToLine,
-  Layers,
   Sparkles,
   Lock,
 } from 'lucide-react';
