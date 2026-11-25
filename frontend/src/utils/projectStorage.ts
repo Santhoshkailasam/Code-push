@@ -1,6 +1,6 @@
 import type { Project } from '../types';
 
-const ACTIVE_PROJECT_KEY = 'codepush_active_project_id';
+let selectedProjectIdMemory: string | null = null;
 
 export function createDefaultProject(userId?: string): Project {
   const shortUid = userId ? userId.slice(0, 6) : 'guest';
@@ -18,16 +18,7 @@ export function createDefaultProject(userId?: string): Project {
 }
 
 export async function getProjects(userId?: string): Promise<Project[]> {
-  const localKey = `codepush_projects_${userId || 'guest'}`;
-
-  // Clean legacy active project ID if pointing to old skillswap default
-  try {
-    if (localStorage.getItem(ACTIVE_PROJECT_KEY) === 'proj_skillswap_default') {
-      localStorage.removeItem(ACTIVE_PROJECT_KEY);
-    }
-  } catch {}
-
-  // 1. Fetch from PostgreSQL Projects API
+  // Fetch directly from PostgreSQL Projects API (no localStorage caching)
   try {
     const url = userId
       ? `/.netlify/functions/projects?userId=${encodeURIComponent(userId)}`
@@ -36,54 +27,20 @@ export async function getProjects(userId?: string): Promise<Project[]> {
     if (res.ok) {
       const data = await res.json();
       if (data && Array.isArray(data.projects)) {
-        const projects: Project[] = data.projects;
-        if (projects.length > 0) {
-          try {
-            localStorage.setItem(localKey, JSON.stringify(projects));
-          } catch {}
-          return projects;
-        }
+        return data.projects as Project[];
       }
     }
   } catch (err) {
-    console.warn('[PostgreSQL Projects API] fetch error, using local cache:', err);
+    console.warn('[PostgreSQL Projects API] fetch error:', err);
   }
-
-  // 2. Fallback to localStorage cache for offline resiliency
-  try {
-    const cached = localStorage.getItem(localKey);
-    if (cached) {
-      const parsed = JSON.parse(cached);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
-      }
-    }
-  } catch {}
 
   return [];
 }
 
 export async function saveProject(project: Project, userId?: string): Promise<Project[]> {
   const updatedProject = { ...project, userId: userId || project.userId };
-  const localKey = `codepush_projects_${userId || 'guest'}`;
 
-  // 1. Prepare optimistic list
-  let updatedList: Project[] = [];
-  try {
-    const cached = localStorage.getItem(localKey);
-    const existing: Project[] = cached ? JSON.parse(cached) : [];
-    const idx = existing.findIndex((p) => p.id === project.id);
-    if (idx >= 0) {
-      updatedList = [...existing];
-      updatedList[idx] = updatedProject;
-    } else {
-      updatedList = [updatedProject, ...existing];
-    }
-  } catch {
-    updatedList = [updatedProject];
-  }
-
-  // 2. Persist to PostgreSQL tables via Projects API
+  // Persist to PostgreSQL tables via Projects API
   const res = await fetch('/.netlify/functions/projects', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -99,26 +56,10 @@ export async function saveProject(project: Project, userId?: string): Promise<Pr
     throw new Error(errMsg);
   }
 
-  const data = await res.json();
-  const savedProject: Project = data.project || updatedProject;
-  const sIdx = updatedList.findIndex((p) => p.id === savedProject.id);
-  if (sIdx >= 0) {
-    updatedList[sIdx] = savedProject;
-  } else {
-    updatedList = [savedProject, ...updatedList];
-  }
-
-  // 3. Update localStorage ONLY after PostgreSQL confirms persistence
-  try {
-    localStorage.setItem(localKey, JSON.stringify(updatedList));
-  } catch {}
-
-  return updatedList;
+  return getProjects(userId);
 }
 
 export async function deleteProject(projectId: string, userId?: string): Promise<Project[]> {
-  const localKey = `codepush_projects_${userId || 'guest'}`;
-
   // 1. Remove from PostgreSQL tables via Projects API
   const res = await fetch(`/.netlify/functions/projects?id=${encodeURIComponent(projectId)}`, {
     method: 'DELETE',
@@ -133,36 +74,18 @@ export async function deleteProject(projectId: string, userId?: string): Promise
     throw new Error(errMsg);
   }
 
-  // 2. Remove from localStorage after PostgreSQL deletion
-  try {
-    const cached = localStorage.getItem(localKey);
-    if (cached) {
-      const parsed: Project[] = JSON.parse(cached);
-      const filtered = parsed.filter((p) => p.id !== projectId);
-      localStorage.setItem(localKey, JSON.stringify(filtered));
-    }
-  } catch {}
-
-  // 3. Clear active project ID if it was this one
-  try {
-    if (localStorage.getItem(ACTIVE_PROJECT_KEY) === projectId) {
-      localStorage.removeItem(ACTIVE_PROJECT_KEY);
-    }
-  } catch {}
+  // 2. Clear active project ID if it was this one
+  if (selectedProjectIdMemory === projectId) {
+    selectedProjectIdMemory = null;
+  }
 
   return getProjects(userId);
 }
 
 export function getSelectedProjectId(): string | null {
-  try {
-    return localStorage.getItem(ACTIVE_PROJECT_KEY);
-  } catch {
-    return null;
-  }
+  return selectedProjectIdMemory;
 }
 
 export function setSelectedProjectId(id: string): void {
-  try {
-    localStorage.setItem(ACTIVE_PROJECT_KEY, id);
-  } catch {}
+  selectedProjectIdMemory = id;
 }

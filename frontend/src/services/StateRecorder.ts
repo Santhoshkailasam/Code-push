@@ -78,6 +78,73 @@ class StateRecorderEngine {
     return [...this.ringBuffer];
   }
 
+  /**
+   * Recursively scrubs PII values while preserving exact object keys, arrays, and primitive types.
+   */
+  private scrubStateShape(value: any): any {
+    if (value === null || value === undefined) return value;
+    if (Array.isArray(value)) {
+      return value.length > 0 ? [this.scrubStateShape(value[0])] : [];
+    }
+    if (typeof value === 'object') {
+      const out: Record<string, any> = {};
+      for (const [k, v] of Object.entries(value)) {
+        out[k] = this.scrubStateShape(v);
+      }
+      return out;
+    }
+    if (typeof value === 'string') return 'anonymized_str';
+    if (typeof value === 'number') return 1;
+    if (typeof value === 'boolean') return true;
+    return null;
+  }
+
+  /**
+   * Returns anonymized persisted-state snapshots for Shadow-Boot Pre-Flight testing.
+   * Falls back to realistic baseline snapshots if no runtime state has been recorded yet.
+   */
+  exportAnonymizedSchemaSnapshots(): Array<{ label: string; state: Record<string, any> }> {
+    const liveFrames = this.ringBuffer.filter(
+      (f) => f.stateSnapshot && Object.keys(f.stateSnapshot).length > 0
+    );
+
+    const snapshots: Array<{ label: string; state: Record<string, any> }> = [];
+    if (liveFrames.length > 0) {
+      const latest = liveFrames[liveFrames.length - 1];
+      snapshots.push({
+        label: `live_session_${latest.route || 'HomeScreen'}`,
+        state: this.scrubStateShape(latest.stateSnapshot),
+      });
+    }
+
+    return [...snapshots, ...this.getDefaultSeedSnapshots()];
+  }
+
+  getDefaultSeedSnapshots(): Array<{ label: string; state: Record<string, any> }> {
+    return [
+      {
+        label: 'v1_legacy_user_state',
+        state: {
+          user: { id: 'usr_anon', name: 'anonymized_str', isLoggedIn: true },
+          cart: { items: [{ id: 1, qty: 1 }], currency: 'USD' },
+          preferences: { darkMode: true, notifications: true },
+        },
+      },
+      {
+        label: 'v1_empty_fresh_install',
+        state: {},
+      },
+      {
+        label: 'v1_offline_cached_session',
+        state: {
+          user: { id: 'usr_anon', name: 'anonymized_str', isLoggedIn: false },
+          cart: { items: [] },
+          offlineQueue: [{ action: 'SYNC_PROFILE', retries: 0 }],
+        },
+      },
+    ];
+  }
+
   clear() {
     this.ringBuffer = [];
     this.frameCounter = 0;

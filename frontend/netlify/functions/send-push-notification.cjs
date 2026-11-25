@@ -14,6 +14,9 @@ function initFirebaseAdmin() {
 
   // Load environment variables if not loaded yet
   try {
+    require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
+  } catch {}
+  try {
     require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
   } catch {}
   try {

@@ -106,6 +106,7 @@ function netlifyFunctionsPlugin(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
+  envDir: '..',
   server: {
     host: '0.0.0.0',
     port: 5173,

@@ -48,6 +48,30 @@ export const ReleaseDetailScreen: React.FC<Props> = ({ item, onBack, theme = 'da
   const [liveExperiment, setLiveExperiment] = useState(item.experiment || null);
   const [aiReport, setAiReport] = useState(item.aiGuardianReport || null);
   const [isLoadingAiReport, setIsLoadingAiReport] = useState(false);
+  const [quarantinedCohorts, setQuarantinedCohorts] = useState(item.quarantinedCohorts || []);
+  const [liftingCohortId, setLiftingCohortId] = useState<string | null>(null);
+
+  const handleLiftQuarantine = async (cohortId: string) => {
+    setLiftingCohortId(cohortId);
+    try {
+      const res = await fetch('/.netlify/functions/report-crash', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'lift-quarantine',
+          releaseId: item.id,
+          cohortId,
+          projectId: activeProject?.id,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setQuarantinedCohorts(Array.isArray(data.quarantinedCohorts) ? data.quarantinedCohorts : []);
+      }
+    } catch {} finally {
+      setLiftingCohortId(null);
+    }
+  };
 
   const handlePromoteExperiment = async (winningVariant: 'variant_a' | 'variant_b') => {
     setIsPromotingExperiment(true);
@@ -837,6 +861,80 @@ export const ReleaseDetailScreen: React.FC<Props> = ({ item, onBack, theme = 'da
               <span>Zero crash loops or unhandled exceptions detected in active telemetry window.</span>
             </span>
             <span className="text-slate-400 font-mono">100% Stability Index</span>
+          </div>
+        )}
+      </div>
+
+      {/* Dimensional Cohort Quarantine & Shadow-Boot Guard */}
+      <div
+        className={`p-6 rounded-3xl border transition-all ${
+          isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-xl'
+        }`}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-800/60">
+          <div className="flex items-center space-x-3">
+            <div className="p-2.5 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-400">
+              <ShieldCheck className="h-6 w-6" />
+            </div>
+            <div>
+              <h3 className={`text-base font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                Dimensional Cohort Quarantine
+              </h3>
+              <p className={`text-xs mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                Surgically isolates crashing OS/RAM/ABI device slices without rolling back healthy users.
+              </p>
+            </div>
+          </div>
+          {item.shadowBootReport && (
+            <span
+              className={`px-3 py-1 rounded-full text-[11px] font-mono font-bold border ${
+                item.shadowBootReport.passed
+                  ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                  : 'bg-rose-500/15 border-rose-500/30 text-rose-400'
+              }`}
+            >
+              {item.shadowBootReport.passed
+                ? `Shadow-Boot Verified (${item.shadowBootReport.snapshotsTested} snapshots)`
+                : 'Shadow-Boot Warning'}
+            </span>
+          )}
+        </div>
+
+        {quarantinedCohorts.length > 0 ? (
+          <div className="space-y-2.5">
+            {quarantinedCohorts.map((cohort) => (
+              <div
+                key={cohort.id}
+                className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-wrap items-center justify-between gap-3"
+              >
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs font-bold text-amber-300">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    <span>{cohort.reason}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 text-[10px] font-mono text-slate-400">
+                    {cohort.osVersion && <span className="px-2 py-0.5 rounded bg-slate-950/70">OS: {cohort.osVersion}</span>}
+                    {cohort.ramTier && <span className="px-2 py-0.5 rounded bg-slate-950/70">RAM: {cohort.ramTier}</span>}
+                    {cohort.abi && <span className="px-2 py-0.5 rounded bg-slate-950/70">ABI: {cohort.abi}</span>}
+                    {cohort.manufacturer && <span className="px-2 py-0.5 rounded bg-slate-950/70">OEM: {cohort.manufacturer}</span>}
+                    <span className="px-2 py-0.5 rounded bg-slate-950/70">Crashes: {cohort.crashCount}</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleLiftQuarantine(cohort.id)}
+                  disabled={liftingCohortId === cohort.id}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/30 cursor-pointer disabled:opacity-50"
+                >
+                  {liftingCohortId === cohort.id ? 'Lifting...' : 'Lift Quarantine'}
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 text-xs text-emerald-400 flex items-center space-x-2">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            <span>No hardware or OS cohorts quarantined. 100% of device dimensions eligible for rollout.</span>
           </div>
         )}
       </div>

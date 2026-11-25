@@ -45,6 +45,8 @@ function formatReleaseRow(r) {
     experiment: r.experiment,
     aiGuardianReport: r.ai_guardian_report,
     dualSlotStatus: r.dual_slot_status,
+    quarantinedCohorts: r.quarantined_cohorts || [],
+    shadowBootReport: r.shadow_boot_report || null,
     createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
     updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : new Date().toISOString(),
   };

@@ -38,6 +38,22 @@ function isSemVerCompatible(clientBinary, rule) {
   return cleanClient === cleanRule;
 }
 
+// Check if a device's hardware/OS dimensions match a quarantined cohort rule
+function matchesQuarantinedCohort(cohort, deviceDims) {
+  if (!cohort || typeof cohort !== 'object') return false;
+  const dims = ['osVersion', 'ramTier', 'abi', 'manufacturer'];
+  let hasConstraint = false;
+  for (const key of dims) {
+    if (cohort[key]) {
+      hasConstraint = true;
+      const expected = String(cohort[key]).trim().toLowerCase();
+      const actual = deviceDims[key] ? String(deviceDims[key]).trim().toLowerCase() : null;
+      if (!actual || actual !== expected) return false;
+    }
+  }
+  return hasConstraint;
+}
+
 // Deterministic hash ring for gradual percentage rollouts
 function getDeviceBucket(deviceId, releaseId) {
   const seed = `${deviceId}_${releaseId}`;
@@ -134,6 +150,8 @@ exports.handler = async (event) => {
         experiment: row.experiment,
         aiGuardianReport: row.ai_guardian_report,
         dualSlotStatus: row.dual_slot_status,
+        quarantinedCohorts: Array.isArray(row.quarantined_cohorts) ? row.quarantined_cohorts : [],
+        shadowBootReport: row.shadow_boot_report || null,
       };
     }
   } catch (pgErr) {
@@ -193,6 +211,32 @@ exports.handler = async (event) => {
 
   const clientOSVersion = query.osVersion || query.clientOSVersion || headers['x-os-version'] || null;
   const clientCohort = query.cohort || headers['x-client-cohort'] || 'general_public';
+  const clientRamTier = query.ramTier || headers['x-ram-tier'] || null;
+  const clientAbi = query.abi || headers['x-abi'] || null;
+  const clientManufacturer = query.manufacturer || headers['x-manufacturer'] || null;
+
+  // 3.5 🛡️ DIMENSIONAL COHORT QUARANTINE CHECK
+  if (Array.isArray(targetRelease.quarantinedCohorts) && targetRelease.quarantinedCohorts.length > 0) {
+    const deviceDims = {
+      osVersion: clientOSVersion,
+      ramTier: clientRamTier,
+      abi: clientAbi,
+      manufacturer: clientManufacturer,
+    };
+    const matchedCohort = targetRelease.quarantinedCohorts.find((c) => matchesQuarantinedCohort(c, deviceDims));
+    if (matchedCohort) {
+      return {
+        statusCode: 200,
+        headers: corsHeaders,
+        body: JSON.stringify({
+          updateAvailable: false,
+          cohortQuarantined: true,
+          quarantinedCohort: matchedCohort,
+          reason: `Release quarantined for device cohort (${matchedCohort.reason || 'stability protection'}). Keeping device on stable baseline.`,
+        }),
+      };
+    }
+  }
 
   if (targetRelease.targetingRules) {
     const rules = targetRelease.targetingRules;

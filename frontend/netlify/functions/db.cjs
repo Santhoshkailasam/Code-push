@@ -1,7 +1,10 @@
 const { Pool } = require('pg');
 const path = require('path');
 
-// Load database environment variables strictly from frontend/.env
+// Load database environment variables from codepush/.env or frontend/.env
+try {
+  require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
+} catch {}
 try {
   require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 } catch {}

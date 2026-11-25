@@ -15,21 +15,12 @@ export function getUserApiKey(uid?: string): string {
   return fallbackKey;
 }
 
-export function getCachedVersionData(projectId?: string): VersionData | null {
-  if (!projectId) return null;
-  try {
-    const raw = localStorage.getItem(`codepush_cached_data_${projectId}`);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
+export function getCachedVersionData(_projectId?: string): VersionData | null {
+  return null;
 }
 
-export function setCachedVersionData(projectId: string, data: VersionData): void {
-  if (!projectId || !data) return;
-  try {
-    localStorage.setItem(`codepush_cached_data_${projectId}`, JSON.stringify(data));
-  } catch {}
+export function setCachedVersionData(_projectId: string, _data: VersionData): void {
+  // No localStorage caching; data is fetched directly from PostgreSQL
 }
 
 // In-flight request deduplication per project to prevent cross-project cache collisions

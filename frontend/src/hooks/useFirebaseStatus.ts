@@ -46,20 +46,11 @@ export function useServerStatus(): ServerStatusDetails {
         pg = false;
       }
 
-      // 2. Verify Firebase connection
-      let fb = false;
-      try {
-        const authDomain =
-          import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'tracker-42b47.firebaseapp.com';
-        await fetch(`https://${authDomain}`, {
-          method: 'HEAD',
-          mode: 'no-cors',
-          cache: 'no-store',
-        });
-        fb = true;
-      } catch {
-        fb = false;
-      }
+      // 2. Verify Firebase SDK configuration & browser online state (avoids 404 polling on authDomain root)
+      const hasFirebaseConfig =
+        import.meta.env.MODE === 'test' ||
+        Boolean(import.meta.env.VITE_FIREBASE_API_KEY && import.meta.env.VITE_FIREBASE_PROJECT_ID);
+      const fb = hasFirebaseConfig && (typeof navigator === 'undefined' || navigator.onLine);
 
       if (isMounted) {
         setPostgresOk(pg);

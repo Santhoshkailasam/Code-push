@@ -66,6 +66,33 @@ export interface DualSlotStatus {
   quarantinedHashes: string[];
 }
 
+export interface QuarantinedCohort {
+  id: string;
+  osVersion?: string;
+  ramTier?: 'low' | 'mid' | 'high';
+  abi?: string;
+  manufacturer?: string;
+  reason: string;
+  crashCount: number;
+  quarantinedAt: string;
+  autoQuarantined: boolean;
+}
+
+export interface ShadowBootError {
+  snapshotLabel: string;
+  message: string;
+  stack?: string;
+}
+
+export interface ShadowBootReport {
+  passed: boolean;
+  snapshotsTested: number;
+  executionTimeMs: number;
+  bridgeCallsVerified: number;
+  errors: ShadowBootError[];
+  testedAt: string;
+}
+
 export interface AIGuardianReport {
   incidentId: string;
   severity: 'low' | 'medium' | 'critical';
@@ -131,6 +158,8 @@ export interface ReleaseInfo {
   experiment?: ExperimentConfig;
   aiGuardianReport?: AIGuardianReport;
   dualSlotStatus?: DualSlotStatus;
+  quarantinedCohorts?: QuarantinedCohort[];
+  shadowBootReport?: ShadowBootReport;
 }
 
 export interface ReleaseHistoryItem {
@@ -167,6 +196,8 @@ export interface ReleaseHistoryItem {
   experiment?: ExperimentConfig;
   aiGuardianReport?: AIGuardianReport;
   dualSlotStatus?: DualSlotStatus;
+  quarantinedCohorts?: QuarantinedCohort[];
+  shadowBootReport?: ShadowBootReport;
 }
 
 export interface VersionData {

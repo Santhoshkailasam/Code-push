@@ -1,6 +1,82 @@
 const db = require('./db.cjs');
 const { extractApiKey, verifyApiKey } = require('./auth.cjs');
 
+// Sliding 10-minute window for Dimensional Cohort Quarantine detection
+const COHORT_WINDOW_MS = 10 * 60 * 1000;
+const cohortCrashWindow = new Map();
+
+function resetCohortWindow() {
+  cohortCrashWindow.clear();
+}
+
+function buildCohortSignature(projectId, platform, version, dims) {
+  const clean = (v) => (v ? String(v).trim().toLowerCase() : '');
+  return [
+    projectId,
+    platform,
+    version,
+    clean(dims.osVersion),
+    clean(dims.ramTier),
+    clean(dims.abi),
+    clean(dims.manufacturer),
+  ].join('|');
+}
+
+async function evaluateCohortQuarantine({ projectId, platform, version, dims, threshold = 3 }) {
+  const hasDimension = Boolean(dims.osVersion || dims.ramTier || dims.abi || dims.manufacturer);
+  if (!hasDimension) return null;
+
+  const sig = buildCohortSignature(projectId, platform, version, dims);
+  const now = Date.now();
+  const timestamps = (cohortCrashWindow.get(sig) || []).filter((ts) => now - ts <= COHORT_WINDOW_MS);
+  timestamps.push(now);
+  cohortCrashWindow.set(sig, timestamps);
+
+  if (timestamps.length < threshold) return null;
+
+  const relRes = await db.query(
+    `SELECT id, quarantined_cohorts FROM releases
+     WHERE (project_id = $1 OR project_id IS NULL) AND platform = $2 AND version = $3
+     ORDER BY created_at DESC LIMIT 1`,
+    [projectId, platform, version]
+  );
+  const relRow = relRes?.rows?.[0];
+  const existing = Array.isArray(relRow?.quarantined_cohorts) ? relRow.quarantined_cohorts : [];
+
+  const alreadyQuarantined = existing.some(
+    (c) =>
+      (c.osVersion || '') === (dims.osVersion || '') &&
+      (c.ramTier || '') === (dims.ramTier || '') &&
+      (c.abi || '') === (dims.abi || '') &&
+      (c.manufacturer || '') === (dims.manufacturer || '')
+  );
+  if (alreadyQuarantined) return null;
+
+  const labelParts = [dims.osVersion && `OS ${dims.osVersion}`, dims.ramTier && `${dims.ramTier}-RAM`, dims.abi, dims.manufacturer].filter(Boolean);
+  const cohortRule = {
+    id: `qc_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+    ...(dims.osVersion ? { osVersion: dims.osVersion } : {}),
+    ...(dims.ramTier ? { ramTier: dims.ramTier } : {}),
+    ...(dims.abi ? { abi: dims.abi } : {}),
+    ...(dims.manufacturer ? { manufacturer: dims.manufacturer } : {}),
+    reason: `Auto-quarantined ${labelParts.join(' + ')} after ${timestamps.length} crashes in 10m`,
+    crashCount: timestamps.length,
+    quarantinedAt: new Date(now).toISOString(),
+    autoQuarantined: true,
+  };
+
+  if (relRow?.id) {
+    const updated = [...existing, cohortRule];
+    await db.query(
+      `UPDATE releases SET quarantined_cohorts = $1, updated_at = NOW() WHERE id = $2`,
+      [JSON.stringify(updated), relRow.id]
+    );
+  }
+  return cohortRule;
+}
+
+exports.resetCohortWindow = resetCohortWindow;
+
 exports.handler = async (event) => {
   const headers = {
     'Content-Type': 'application/json',
@@ -119,6 +195,42 @@ exports.handler = async (event) => {
           statusCode: 200,
           headers,
           body: JSON.stringify({ success: true, aiReport: report }),
+        };
+      }
+
+      // Lift a specific dimensional cohort quarantine rule
+      if (body.action === 'lift-quarantine') {
+        const targetReleaseId = body.releaseId || body.id;
+        const cohortId = body.cohortId;
+        if (!targetReleaseId || !cohortId) {
+          return {
+            statusCode: 400,
+            headers,
+            body: JSON.stringify({ error: 'releaseId and cohortId are required' }),
+          };
+        }
+        const relRes = await db.query(
+          `SELECT id, quarantined_cohorts FROM releases WHERE id = $1 LIMIT 1`,
+          [targetReleaseId]
+        );
+        const relRow = relRes?.rows?.[0];
+        if (!relRow) {
+          return { statusCode: 404, headers, body: JSON.stringify({ error: 'Release not found' }) };
+        }
+        const existing = Array.isArray(relRow.quarantined_cohorts) ? relRow.quarantined_cohorts : [];
+        const updated = existing.filter((c) => c.id !== cohortId);
+        await db.query(
+          `UPDATE releases SET quarantined_cohorts = $1, updated_at = NOW() WHERE id = $2`,
+          [JSON.stringify(updated), relRow.id]
+        );
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            success: true,
+            message: 'Cohort quarantine lifted',
+            quarantinedCohorts: updated,
+          }),
         };
       }
 
@@ -255,6 +367,21 @@ exports.handler = async (event) => {
         }
       }
 
+      // Evaluate Dimensional Cohort Quarantine (surgical isolation before global trip)
+      const cohortDims = {
+        osVersion: body.osVersion || null,
+        ramTier: body.ramTier || null,
+        abi: body.abi || null,
+        manufacturer: body.manufacturer || null,
+      };
+      const quarantinedCohort = await evaluateCohortQuarantine({
+        projectId,
+        platform: targetPlatform,
+        version: targetVersion,
+        dims: cohortDims,
+        threshold: Number(body.cohortThreshold) || 3,
+      });
+
       return {
         statusCode: 200,
         headers,
@@ -262,9 +389,13 @@ exports.handler = async (event) => {
           success: true,
           message: circuitBreakerTriggered
             ? `🚨 Circuit Breaker tripped: v${targetVersion} auto-revoked due to crash spike.`
+            : quarantinedCohort
+            ? `🛡️ Cohort quarantined (${quarantinedCohort.reason}) without revoking healthy devices.`
             : 'Crash report recorded in PostgreSQL',
           circuitBreakerTriggered,
           tripDetails,
+          cohortQuarantined: Boolean(quarantinedCohort),
+          quarantinedCohort,
           injectedCount: countToInject,
         }),
       };

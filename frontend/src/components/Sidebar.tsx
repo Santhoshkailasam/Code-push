@@ -125,9 +125,16 @@ export function Sidebar({
               )}
             </div>
             <div className="relative">
-              <button
-                type="button"
+              <div
+                role="button"
+                tabIndex={0}
                 onClick={() => setShowAppDropdown(!showAppDropdown)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setShowAppDropdown(!showAppDropdown);
+                  }
+                }}
                 className={`w-full flex items-center justify-between p-2.5 rounded-2xl border text-xs font-bold transition-all cursor-pointer ${
                   showAppDropdown
                     ? isDark
@@ -161,6 +168,7 @@ export function Sidebar({
                             e.stopPropagation();
                             setShowAppId(!showAppId);
                           }}
+                          onKeyDown={(e) => e.stopPropagation()}
                           className="p-0.5 text-slate-400 hover:text-cyan-400 transition-colors cursor-pointer"
                           title={showAppId ? "Hide App ID" : "Reveal App ID"}
                         >
@@ -171,7 +179,7 @@ export function Sidebar({
                   </div>
                 </div>
                 <ChevronDown className={`h-4 w-4 shrink-0 ml-1 transition-transform duration-200 ${showAppDropdown ? 'rotate-180 text-cyan-500' : ''} ${isDark ? 'text-slate-400' : 'text-slate-400'}`} />
-              </button>
+              </div>
 
               {/* Ultra-Premium App Dropdown */}
               {showAppDropdown && (

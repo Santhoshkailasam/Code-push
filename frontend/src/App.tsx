@@ -9,6 +9,8 @@ import {
   TableSkeleton,
   UploaderSkeleton,
 } from './components/SkeletonLoader';
+import { ErrorScreen, ErrorBoundary } from './components/ErrorScreen';
+import { useServerStatus } from './hooks/useFirebaseStatus';
 import { ActiveReleaseCard } from './pages/Dashboard/ActiveReleaseCard';
 import { DashboardAnalytics } from './pages/Dashboard/DashboardAnalytics';
 import { BundleUploader } from './pages/PublishUpdates/BundleUploader';
@@ -117,8 +119,24 @@ export const App: React.FC = () => {
     return true; // No data yet: show skeleton while fetching
   });
 
+  // Server health status (used to keep skeleton loader active when server is offline)
+  const { status: serverStatus } = useServerStatus();
+  const isServerOffline = serverStatus === 'offline';
+
   // Persistent activeTab across browser refreshes
   const [activeTab, setActiveTab] = useState<string>(() => getInitialActiveTab());
+  const [routeError, setRouteError] = useState<{ statusCode: number | string; message?: string } | null>(() => {
+    if (typeof window !== 'undefined' && window.location.hash) {
+      const hash = window.location.hash.replace('#', '').trim();
+      if (hash && !VALID_TABS.includes(hash)) {
+        return {
+          statusCode: 404,
+          message: `The route "#${hash}" does not exist in this dashboard.`,
+        };
+      }
+    }
+    return null;
+  });
 
   // Persistent selected release for release-detail view
   const [selectedReleaseForDetail, setSelectedReleaseForDetail] = useState<ReleaseHistoryItem | null>(() => {
@@ -131,6 +149,7 @@ export const App: React.FC = () => {
   });
 
   const handleTabChange = (tab: string) => {
+    setRouteError(null);
     setActiveTab(tab);
     try {
       localStorage.setItem('codepush_active_tab', tab);
@@ -159,6 +178,14 @@ export const App: React.FC = () => {
     const handleHashChange = () => {
       if (!user) return;
       const hash = window.location.hash.replace('#', '').trim();
+      if (hash && !VALID_TABS.includes(hash)) {
+        setRouteError({
+          statusCode: 404,
+          message: `The route "#${hash}" does not exist in this dashboard.`,
+        });
+        return;
+      }
+      setRouteError(null);
       if (hash && VALID_TABS.includes(hash) && hash !== activeTab) {
         setActiveTab(hash);
       }
@@ -884,8 +911,8 @@ export const App: React.FC = () => {
             </div>
           )}
 
-          {/* SKELETON LOADING STATE: Displays ONLY when actively fetching data from the database */}
-          {isFetchingData && activeTab !== 'profile' ? (
+          {/* SKELETON LOADING STATE: Displays when server is offline or actively fetching data */}
+          {(isServerOffline || isFetchingData) && activeTab !== 'profile' ? (
             <div className="space-y-6 animate-fade-in">
               {activeTab === 'publish' ? (
                 <UploaderSkeleton theme={theme} />
@@ -895,8 +922,17 @@ export const App: React.FC = () => {
                 <DashboardSkeleton theme={theme} />
               )}
             </div>
+          ) : routeError ? (
+            <ErrorScreen
+              statusCode={routeError.statusCode}
+              message={routeError.message}
+              theme={theme}
+              onRetry={() => window.location.reload()}
+              onGoHome={() => handleTabChange('dashboard')}
+            />
           ) : (
-            <>
+            <ErrorBoundary theme={theme} onGoHome={() => handleTabChange('dashboard')}>
+              <>
               {/* NO APP STATE: Show create-app prompt when no active project */}
               {!activeProjectId && activeTab !== 'profile' && (
                 <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-6 text-center animate-fade-in">
@@ -1079,6 +1115,7 @@ export const App: React.FC = () => {
             </>
           )}
         </>
+        </ErrorBoundary>
       )}
 
           {/* SCREEN 4: PROFILE & API KEYS — always accessible */}
